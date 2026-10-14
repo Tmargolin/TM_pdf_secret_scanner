@@ -33,3 +33,26 @@ step 6, real sites in step 8).
 If no notification appears but the service worker shows no error, Windows is
 hiding it: check Settings → System → Notifications (Google Chrome on, Do not
 disturb off) and the notification center (Win+N).
+
+## Step 3 – options page and allow list
+
+Open the **options page** from `chrome://extensions` → extension card →
+Details → *Extension options*. Keep the **service worker** console open.
+
+| # | Do | Expect |
+|---|---|---|
+| 3.1 | Remove the extension, then **Load unpacked** `dist/` again (dev build) | The options page opens by itself. Yellow "Not set up yet" banner. Site list: `http://localhost/*`. No red banner. Help line about OS notifications under the site list. |
+| 3.2 | Reload the extension (reload icon) | **No** options tab opens. |
+| 3.3 | APP-ID `mock-app-id` → Save | "Saved."; yellow banner gone. Offscreen console: `settings updated { configured: true, … }`. Service worker: **no** new `content scripts reconciled` line. |
+| 3.4 | API URL `http://evil.com` → Save; reload the options page | Error under API URL; "Not saved…". After reload the old URL is shown (nothing stored). |
+| 3.5 | Advanced: Chunk size `abc` → Save | "Advanced settings" opens; "Chunk size must be a whole number". |
+| 3.6 | Restore defaults → Save | Defaults back; APP-ID unchanged (tick *Show* to see it). |
+| 3.7 | Add site `example.com` | Chrome asks for access to example.com → Allow. Listed as `*://example.com/*`; "Added … Reload tabs already open on it." Service worker: `content scripts reconciled { allowed: 2, active: 2 }` – **without** reloading the extension. |
+| 3.8 | Open `https://example.com`, page console (Verbose) | `[PSS:content] content script loaded`. Then run `document.body.append(Object.assign(document.createElement('input'), { type: 'file' }))`, pick a file → notification "Received 1 file(s) from example.com …". |
+| 3.9 | Add `example.org` → **Deny** in Chrome's prompt | "Access to *://example.org/* was not granted – the site was not added." Not listed. |
+| 3.10 | Add `example.com` again; add `google` | "already on the list"; "not a site" with the hint. No Chrome prompt for either. |
+| 3.11 | `chrome://extensions` → Details → Site access: remove example.com | Service worker: `reconciled { allowed: 2, active: 1 }`. Reload example.com → no content-script line. (The options list still shows example.com – it is on the list, not granted; see 3.12.) |
+| 3.12 | Options page: Remove example.com, then add it again | Listed again; service worker `active: 2`. (Chrome may skip the prompt – README, known Chrome behaviour.) |
+| 3.13 | Remove example.com | Service worker `active: 1`; example.com no longer scanned. |
+| 3.14 | Restart Chrome; open the test page (`npm run serve:test-pages`) and pick a file | Notification as in step 2 – registration and settings survived the restart. |
+| 3.15 | *(Optional, if Chrome offers it on a notification)* turn off notifications for the extension | Red banner on the open options page at once; service worker warns `notifications are blocked in Chrome …`. Turn them on again → banner gone. |
