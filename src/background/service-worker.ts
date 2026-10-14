@@ -4,6 +4,7 @@
 // top level so Chrome can wake it for these events.
 
 import { isFromContentScript, isFromOffscreen, parseRuntimeMessage } from '../shared/messages.ts';
+import { logNotificationPermission } from '../shared/notification-permission.ts';
 import { createLogger } from '../shared/safe-logger.ts';
 import { chromeOffscreenApi, createOffscreenManager, OFFSCREEN_PATH } from './offscreen-manager.ts';
 import { chromeNotificationApi, createNotifier } from './notifications.ts';
@@ -56,6 +57,14 @@ chrome.runtime.onStartup.addListener(() => {
 // Granted in the options page, or revoked/granted in chrome://extensions.
 chrome.permissions.onAdded.addListener(reconcileScripts);
 chrome.permissions.onRemoved.addListener(reconcileScripts);
+
+// Notifications blocked in Chrome cannot be reported by a notification: log it
+// at every start and on every change (the options page also shows a warning).
+chrome.notifications
+  .getPermissionLevel()
+  .then((level) => logNotificationPermission(level, log))
+  .catch(() => {});
+chrome.notifications.onPermissionLevelChanged.addListener((level) => logNotificationPermission(level, log));
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   void settings.onStorageChanged(changes, areaName);

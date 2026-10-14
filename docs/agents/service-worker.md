@@ -14,6 +14,9 @@ Design: `DESIGN.md` §2, §3.1, §7
 | `notifications.ts` | `chrome.notifications.create` (id `batch-<batchId>`, icon `chrome.runtime.getURL('icons/icon-128.png')` – never relative, texts via `chrome.i18n`) from `SHOW_RESULT`, `SCAN_INTERRUPTED`, not-configured; click → options page. Step 2: one skeleton notification per `SHOW_RESULT` ("received, not checked") | messages |
 
 ## Rules
+- Notifications blocked in Chrome (`getPermissionLevel` ≠ `granted`): warning
+  logged at every start and on `onPermissionLevelChanged`
+  (`src/shared/notification-permission.ts`). OS-level blocking is not detectable.
 - `onInstalled` with reason `install` (first install only) → `runtime.openOptionsPage()`.
 - Hold no scan state; every handler is a short event.
 - Accept `SHOW_RESULT` / `OFFSCREEN_READY` only from the offscreen document URL;

@@ -2,6 +2,7 @@
 // in form.ts; this file only moves values between it and the page.
 // Never logs or displays the APP-ID outside its own field.
 
+import { notificationsBlocked } from '../shared/notification-permission.ts';
 import { createLogger } from '../shared/safe-logger.ts';
 import { getDefaultSettings, isConfigured, loadSettings, type Settings } from '../shared/settings.ts';
 import { defaultFormValues, errorsByField, NUMERIC_FIELDS, saveForm, toFormValues, type FormValues } from './form.ts';
@@ -157,6 +158,15 @@ byId<HTMLFormElement>('add-site-form').addEventListener('submit', (event) => {
 chrome.storage.onChanged.addListener((_changes, areaName) => {
   if (areaName === 'local') void loadSettings(storage, dev).then((settings) => renderSites(settings.allowedSites));
 });
+
+// ---------- notifications blocked in Chrome ----------
+
+function showNotificationLevel(level: string): void {
+  byId('notifications-blocked').hidden = !notificationsBlocked(level);
+}
+
+chrome.notifications.onPermissionLevelChanged.addListener(showNotificationLevel);
+void chrome.notifications.getPermissionLevel().then(showNotificationLevel, () => {});
 
 // ---------- load ----------
 

@@ -90,6 +90,9 @@ export interface ChromeFake {
   readonly registeredScripts: chrome.scripting.RegisteredContentScript[];
   /** Every chrome.scripting call that changes the registration, in order. */
   readonly scriptingCalls: { method: 'register' | 'update' | 'unregister'; ids: string[] }[];
+  /** chrome.notifications.getPermissionLevel() answer ("denied" = blocked in Chrome). */
+  notificationLevel: 'granted' | 'denied';
+  readonly onNotificationLevelChanged: FakeEvent<(level: 'granted' | 'denied') => void>;
   /** Notifications currently shown, by id (create with an existing id replaces). */
   readonly notifications: Map<string, chrome.notifications.NotificationCreateOptions>;
   /** Puts the fake on globalThis.chrome. */
@@ -117,6 +120,7 @@ export function createChromeFake(): ChromeFake {
   const registeredScripts: chrome.scripting.RegisteredContentScript[] = [];
   const scriptingCalls: ChromeFake['scriptingCalls'] = [];
   const notifications = new Map<string, chrome.notifications.NotificationCreateOptions>();
+  const onNotificationLevelChanged = createFakeEvent<(level: 'granted' | 'denied') => void>();
 
   const getURL = (path: string) => `chrome-extension://${FAKE_EXTENSION_ID}/${path.replace(/^\//, '')}`;
 
@@ -145,6 +149,8 @@ export function createChromeFake(): ChromeFake {
     registeredScripts,
     scriptingCalls,
     notifications,
+    notificationLevel: 'granted',
+    onNotificationLevelChanged,
     install: () => void Reflect.set(globalThis, 'chrome', fake.chrome),
     uninstall: () => void Reflect.deleteProperty(globalThis, 'chrome'),
   };
@@ -275,6 +281,10 @@ export function createChromeFake(): ChromeFake {
       notifications.set(id, structuredClone(options));
       return id;
     },
+    async getPermissionLevel() {
+      return fake.notificationLevel;
+    },
+    onPermissionLevelChanged: onNotificationLevelChanged,
   };
 
   // chrome.i18n.getMessage over the real catalogue: "" for unknown keys, $1… substitutions.

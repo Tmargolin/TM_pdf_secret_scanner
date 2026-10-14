@@ -1,6 +1,6 @@
 # Shared modules
 
-Files: `src/shared/settings.ts`, `messages.ts`, `types.ts`, `safe-logger.ts`, `scan-port.ts`
+Files: `src/shared/settings.ts`, `messages.ts`, `types.ts`, `safe-logger.ts`, `scan-port.ts`, `notification-permission.ts`
 Design: `DESIGN.md` §4 (result model), §6, §8
 
 | Module | Holds |
@@ -9,6 +9,7 @@ Design: `DESIGN.md` §4 (result model), §6, §8
 | `messages.ts` | Message types + runtime validators (catalogue: `docs/agents/protocol.md`) |
 | `types.ts` | `ScanResult`, `ErrorCode`, job and finding types |
 | `scan-port.ts` | `ScanPort`: the parts of `chrome.runtime.Port` both ends of the scan port use (tests pass fakes) |
+| `notification-permission.ts` | `notificationsBlocked(level)`, `logNotificationPermission` (Chrome-level block only) |
 | `safe-logger.ts` | The only logger; redacts text, bodies, secrets, APP-ID |
 
 ## Rules

@@ -26,7 +26,9 @@ Design: `DESIGN.md` §3.1, §6, §8
 - Known limit: a grant kept because of an overlap is not given back later
   (harmless – scripts run only on allow list ∩ granted).
 - Does not register scripts (service worker does).
-- Shows a warning when `chrome.notifications.getPermissionLevel()` is denied.
+- Shows a red banner while `chrome.notifications.getPermissionLevel()` is not
+  `granted` (updated on `onPermissionLevelChanged`); a help line reminds that
+  OS-level blocking cannot be detected.
 - Opens on first install.
 
 ## Rules

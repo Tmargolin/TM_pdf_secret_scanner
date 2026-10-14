@@ -22,6 +22,7 @@
     .error { color: var(--error); font-size: .9rem; margin: .2rem 0 0; }
     .inline { font-weight: normal; display: inline-flex; gap: .3rem; align-items: center; margin-top: .3rem; }
     .banner { background: #fff4d6; border: 1px solid #e8c766; border-radius: 8px; padding: .6rem 1rem; }
+    .banner.warning { background: #fde7e5; border-color: #e6a19b; }
     .actions { display: flex; gap: .6rem; align-items: center; margin: 1.2rem 0; }
     button { font: inherit; padding: .45rem 1rem; border-radius: 6px; border: 1px solid var(--accent); background: #fff; color: var(--accent); cursor: pointer; }
     button.primary { background: var(--accent); color: #fff; }
@@ -38,6 +39,10 @@
 <body>
   <h1><img src="../icons/icon-48.png" alt="">PDF Secret Scanner – settings</h1>
 
+  <p id="notifications-blocked" class="banner warning" hidden>Notifications from PDF Secret Scanner are
+    turned off in Chrome, so you will not see any alert – also not when a secret is found. Allow notifications
+    for this extension in Chrome again.</p>
+
   <p id="not-configured" class="banner" hidden>Not set up yet: enter your APP-ID and save. Until then no PDF is checked.</p>
 
   <section aria-labelledby="sites-title">
@@ -45,6 +50,8 @@
     <p class="help">PDFs are checked only on these sites. Chrome asks for access to each site when you add it.
       Reload tabs already open on a site after adding it. Upload widgets embedded from another site
       (frames) need that site added too.</p>
+    <p class="help">Alerts are Chrome notifications. If you never see one, check that your operating system
+      allows notifications from Google Chrome (Windows: Settings → System → Notifications; Do not disturb off).</p>
     <ul id="sites"></ul>
     <form id="add-site-form" class="add-site" novalidate>
       <input id="site-input" type="text" placeholder="mail.google.com or *.slack.com" spellcheck="false" aria-label="Site to add">
