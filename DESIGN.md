@@ -156,8 +156,9 @@ Why bytes travel as **base64**: runtime messaging JSON-serialises its payload
 under Chrome's 64 MB message limit. Going directly content script → offscreen
 means one hop, one copy.
 
-Offscreen lifecycle (v1): always present while the extension runs (created on
-install/startup, re-created on demand by step 5 of the flows). Lazy creation and
+Offscreen lifecycle (v1): always present while the extension runs (ensured on
+install, browser start and every service-worker start – e.g. after the
+extension is re-enabled – and re-created on demand by step 5 of the flows). Lazy creation and
 closing after an idle timeout are added in step 10.
 
 Rejected alternatives (see §13): all-in-service-worker, pdf.js in the content

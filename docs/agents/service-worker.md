@@ -8,7 +8,7 @@ Design: `DESIGN.md` §2, §3.1, §7
 ## Responsibilities
 | Module | Does | Triggers |
 |---|---|---|
-| `offscreen-manager.ts` | `ensureOffscreen()` single-flight (`runtime.getContexts`) | `onInstalled`, `onStartup`, `ENSURE_OFFSCREEN` |
+| `offscreen-manager.ts` | `ensureOffscreen()` single-flight (`runtime.getContexts`); "only a single offscreen document" error = success | service-worker start, `onInstalled`, `onStartup`, `ENSURE_OFFSCREEN` (content scripts only; reply `{ ok }`) |
 | `service-worker.ts` | Settings bridge: reply to `OFFSCREEN_READY`, push `SETTINGS_UPDATED` | `storage.onChanged` |
 | `script-registry.ts` | `reconcile()`: register hooks + content script for sites in `allowedSites` **and** granted | `onInstalled`, `onStartup`, `storage.onChanged`, `permissions.onAdded/onRemoved` |
 | `notifications.ts` | `chrome.notifications.create` from `SHOW_RESULT`, `SCAN_INTERRUPTED`, not-configured; click → options page | messages |

@@ -15,7 +15,10 @@ await rm(outdir, { recursive: true, force: true });
 await mkdir(outdir, { recursive: true });
 
 await esbuild.build({
-  entryPoints: { 'background/service-worker': 'src/background/service-worker.ts' },
+  entryPoints: {
+    'background/service-worker': 'src/background/service-worker.ts',
+    'offscreen/offscreen': 'src/offscreen/offscreen.ts',
+  },
   outdir,
   bundle: true,
   format: 'esm',
@@ -27,6 +30,7 @@ await esbuild.build({
 });
 
 await cp('_locales', `${outdir}/_locales`, { recursive: true });
+await cp('src/offscreen/offscreen.html', `${outdir}/offscreen/offscreen.html`);
 
 const manifest = createManifest(template, { mode, version: pkg.version });
 await writeFile(`${outdir}/manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
