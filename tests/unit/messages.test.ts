@@ -11,6 +11,7 @@ import {
   LIMITS,
   parseRuntimeMessage,
   parseScanPortMessage,
+  parseScanPortReply,
   SCAN_PORT_NAME,
 } from '../../src/shared/messages.ts';
 import { getDefaultSettings } from '../../src/shared/settings.ts';
@@ -170,6 +171,42 @@ describe('parseScanPortMessage – BATCH_END', () => {
 
   it('rejects a bad batchId', () => {
     expect(parseScanPortMessage({ type: 'BATCH_END', batchId: 'b', fileCount: 1 })).toBeNull();
+  });
+});
+
+describe('parseScanPortReply – BATCH_ACCEPTED / BATCH_DONE', () => {
+  for (const type of ['BATCH_ACCEPTED', 'BATCH_DONE'] as const) {
+    it(`accepts ${type} and keeps only type and batchId`, () => {
+      expect(parseScanPortReply({ type, batchId: BATCH_ID, results: [{ masked: 'AKIA…B1' }], x: 1 })).toEqual({
+        type,
+        batchId: BATCH_ID,
+      });
+    });
+
+    for (const batchId of [undefined, 'b', 42, `${BATCH_ID} `]) {
+      it(`${type}: rejects batchId ${JSON.stringify(batchId)}`, () => {
+        expect(parseScanPortReply({ type, batchId })).toBeNull();
+      });
+    }
+  }
+
+  for (const data of [
+    null,
+    'BATCH_DONE',
+    [],
+    { batchId: BATCH_ID },
+    { type: 'batch_done', batchId: BATCH_ID },
+    { type: 'BATCH_END', batchId: BATCH_ID, fileCount: 1 },
+    { type: 'SHOW_RESULT', batchId: BATCH_ID },
+  ]) {
+    it(`rejects ${JSON.stringify(data)}`, () => {
+      expect(parseScanPortReply(data)).toBeNull();
+    });
+  }
+
+  it('replies and requests are not interchangeable', () => {
+    expect(parseScanPortMessage({ type: 'BATCH_ACCEPTED', batchId: BATCH_ID })).toBeNull();
+    expect(parseScanPortMessage({ type: 'BATCH_DONE', batchId: BATCH_ID })).toBeNull();
   });
 });
 
