@@ -71,6 +71,10 @@ export interface ChromeFake {
   sendMessageHandler: ((message: unknown) => Promise<unknown>) | null;
   /** Origins chrome.permissions.contains reports as granted (exact pattern match). */
   readonly grantedOrigins: string[];
+  /** The user's answer to the next chrome.permissions.request prompt (default: allow). */
+  permissionAnswer: boolean;
+  /** Every chrome.permissions.request / remove call, in order. */
+  readonly permissionCalls: { method: 'request' | 'remove'; origins: string[] }[];
   /** Content scripts currently registered through chrome.scripting. */
   readonly registeredScripts: chrome.scripting.RegisteredContentScript[];
   /** Every chrome.scripting call that changes the registration, in order. */
@@ -95,6 +99,7 @@ export function createChromeFake(): ChromeFake {
   const storageData: Record<string, unknown> = {};
   const sentMessages: unknown[] = [];
   const grantedOrigins: string[] = [];
+  const permissionCalls: ChromeFake['permissionCalls'] = [];
   const registeredScripts: chrome.scripting.RegisteredContentScript[] = [];
   const scriptingCalls: ChromeFake['scriptingCalls'] = [];
   const notifications = new Map<string, chrome.notifications.NotificationCreateOptions>();
@@ -116,6 +121,8 @@ export function createChromeFake(): ChromeFake {
     sentMessages,
     sendMessageHandler: null,
     grantedOrigins,
+    permissionAnswer: true,
+    permissionCalls,
     registeredScripts,
     scriptingCalls,
     notifications,
@@ -180,6 +187,21 @@ export function createChromeFake(): ChromeFake {
   const permissions = {
     async contains({ origins = [] }: chrome.permissions.Permissions) {
       return origins.every((origin) => grantedOrigins.includes(origin));
+    },
+    async request({ origins = [] }: chrome.permissions.Permissions) {
+      permissionCalls.push({ method: 'request', origins });
+      if (!fake.permissionAnswer) return false;
+      for (const origin of origins) if (!grantedOrigins.includes(origin)) grantedOrigins.push(origin);
+      return true;
+    },
+    async remove({ origins = [] }: chrome.permissions.Permissions) {
+      permissionCalls.push({ method: 'remove', origins });
+      const had = origins.every((origin) => grantedOrigins.includes(origin));
+      for (const origin of origins) {
+        const i = grantedOrigins.indexOf(origin);
+        if (i >= 0) grantedOrigins.splice(i, 1);
+      }
+      return had;
     },
   };
 
