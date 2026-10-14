@@ -171,16 +171,16 @@ with the extension loaded, local test pages and a mock API.
   send `OFFSCREEN_READY` from the offscreen document's sender and check that
   `sendResponse` is called with `undefined`.
 
-**Content script entry – page wiring** (`src/content/index.ts`)
+**Content script entry** (`src/content/index.ts`)
 
-- *Scenario not covered:* the `change` listener on `<input type="file">`,
-  turning the selected files into a batch and calling `chrome.runtime`. The
-  modules it uses (`encode.ts`, `scan-sender.ts`) are fully tested; the wiring
-  itself is checked manually (`docs/manual-tests.md`, step 2).
-- *Needed for a future fix:* a browser-mode test (`tests/browser/`) that
-  loads the entry with the chrome fake installed, selects files in a real
-  input and checks the batch sent on the port. Planned with step 4, which
-  replaces this entry with the hand-off hooks.
+- *Scenario not covered:* the few lines that build the real `chrome.*`
+  dependencies (scan port, `ENSURE_OFFSCREEN`, `SCAN_INTERRUPTED`,
+  `chrome.storage.local`) and call `startContentScript`. The whole path behind
+  it – page files → batch → PDF check → size check → scan requests – is tested
+  in a real browser (`tests/browser/content-pipeline.test.ts`), and the scan
+  sender with a fake port.
+- *Needed for a future fix:* an end-to-end test with the extension loaded in
+  Chromium (planned Playwright E2E tests).
 
 **Options page – page wiring** (`src/options/options.ts`)
 
