@@ -239,7 +239,7 @@ manifest test checks both builds.
 | `HTMLInputElement.prototype.files` (getter) | File inputs – in the DOM, detached (`createElement('input').click()`), inside open or closed shadow roots, opened via label or `showPicker()`; `webkitdirectory` folder pickers |
 | `DataTransfer.prototype.files` (getter) | Drag & drop, paste (`clipboardData`) |
 | `DataTransferItem.prototype.getAsFile` | Drag & drop / paste via `dataTransfer.items` |
-| `FileSystemFileEntry.prototype.file` | Folder drops (`webkitGetAsEntry()` → entries) |
+| `DataTransferItem.prototype.webkitGetAsEntry` → entry prototypes, lazily (D36) | Folder drops (`webkitGetAsEntry()` → entries → `readEntries` → `file()`) |
 | `FileSystemFileHandle.prototype.getFile` | File System Access API (`showOpenFilePicker()`, drag-and-drop handles) |
 
 Wrapper rules:
@@ -879,7 +879,7 @@ passes all tests.
 **Step 4 – hand-off detection**
 1. a. `feat(main-world): hook file input and DataTransfer file getters`
    b. `test(main-world): browser-mode tests for inputs (attached, detached, shadow DOM), drop and paste`
-2. a. `feat(main-world): hook getAsFile, FileSystemFileEntry.file and FileSystemFileHandle.getFile`
+2. a. `feat(main-world): hook getAsFile, folder-drop entries and FileSystemFileHandle.getFile`
    b. `test(main-world): cover items, OPFS file handles and entry hook logic`
 3. a. `feat(main-world): de-duplicate forwarded files with a WeakSet`
    b. `test(main-world): repeated .files reads forward each file once`
@@ -1033,6 +1033,7 @@ Decisions challenged before implementation (2026-10-14).
 | D33 | **Agent guide graph:** `AGENTS.md` master + `docs/agents/*.md` per component; `CLAUDE.md` imports `AGENTS.md`; facts and rules only, kept in sync per commit | Single large file; no agent docs | Agents read only the part they need; no redundancy with DESIGN.md; `AGENTS.md` is the name most coding agents look for. |
 | D34 | From probing: `chunkSize` 32,000 (max 50,000), `maxRequestBytes` 64 KB, "cut short" = reported `characters` < sent, new `API_UNAUTHORIZED`, never send empty chunks | Keep 4,000 / 64,000; rely on 413 | The API returns 200 "clean" while silently not scanning text beyond ~128–256k characters; 32k gives a 4× margin with few calls. |
 | D35 | Offscreen document replies on the scan port: `BATCH_ACCEPTED` (all files received) and `BATCH_DONE` (all jobs ended, then port closed); the content script retries only before `BATCH_ACCEPTED` and reports `SCAN_INTERRUPTED` for a close after it | One-way port; infer from `onDisconnect` / Chrome's error text | `onDisconnect` looks the same for "never connected", "finished" and "crashed"; explicit replies make retry vs interrupted unambiguous. Replies carry no results (results never reach the page). |
+| D36 | Folder-drop entries hooked **lazily**: wrap `DataTransferItem.webkitGetAsEntry`; when an entry/reader passes, wrap its own prototype once (`file`, `createReader`, `getFile`, `getDirectory`, `readEntries`) before the page receives it | Wrap `FileSystemFileEntry.prototype.file` directly; drop folder-drop support | Found in step 4.2: Chrome does not expose `FileSystemEntry`/`FileSystemFileEntry`/`FileSystemDirectoryEntry` as globals, so the planned direct wrap is impossible. Folder drops stay covered at any depth. |
 
 ---
 
@@ -1098,7 +1099,7 @@ for later (below).
 | Static | Type check, both manifests (permissions, localhost only in dev, incognito, CSP, minimum Chrome version), dependency audit | `tsc --noEmit`, manifest test, `npm audit` | Build + CI |
 | Unit – Node | Chunker, page mapping, truncation, response parser (recorded fixtures), masking, aggregation, safe logger, settings validation, allow-list patterns, API limiter / round-robin, job registry, queue cap, timeouts, bounded splitting, notification text, file-name sanitising, i18n keys | Vitest (Node), fake timers, mocked `fetch` | Build + CI |
 | Unit – PDF extraction | pdf.js on generated sample PDFs: text per page, encrypted, no text layer, Hebrew, PEM key, ~20 MB | Vitest (Node) + pdf.js | Build + CI |
-| Unit – browser | Hand-off hooks, MAIN ↔ content channel, WeakSet de-dup, PDF filter, batching – in **real Chromium** (jsdom lacks `DataTransfer`, File System Access API, real `FileList`). `FileSystemFileHandle` via OPFS; `FileSystemFileEntry` hook logic with a stand-in (real behaviour: manual) | **Vitest browser mode** (Playwright provider, headless Chromium) | Build + CI |
+| Unit – browser | Hand-off hooks, MAIN ↔ content channel, WeakSet de-dup, PDF filter, batching – in **real Chromium** (jsdom lacks `DataTransfer`, File System Access API, real `FileList`). `FileSystemFileHandle` via OPFS; entry-chain hook logic (D36) with stand-ins (real behaviour: manual) | **Vitest browser mode** (Playwright provider, headless Chromium) | Build + CI |
 | Unit – wiring | Content script ↔ offscreen ↔ service worker: settings handshake, self-healing, registration reconcile, sender validation, notifications | Vitest + `tests/helpers/chrome-fake.ts` (in-memory `chrome.*`) | Build + CI |
 | Manual – real API | Size limit, error responses, rate limit, PII-only / URL-only texts | `scripts/probe-api.mjs` | **Developer** |
 | Manual – extension | Dev build on `test-pages/` with the **local mock API** (clean / secrets / 413 / 429 / 500 / timeout / malformed); real sites (Gmail, Drive, Slack, WhatsApp Web, ChatGPT); OS notifications incl. Focus Assist; permission prompts; real file dialogs and folder drops; memory/startup measurements (step 10) | `docs/manual-tests.md` checklist | **Developer** |

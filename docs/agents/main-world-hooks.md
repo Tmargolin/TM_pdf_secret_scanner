@@ -10,7 +10,9 @@ Design: `DESIGN.md` §3
 - `HTMLInputElement.prototype.files` (getter)
 - `DataTransfer.prototype.files` (getter)
 - `DataTransferItem.prototype.getAsFile`
-- `FileSystemFileEntry.prototype.file`
+- `DataTransferItem.prototype.webkitGetAsEntry` → lazily (D36): file entry
+  `file`, directory entry `createReader` / `getFile` / `getDirectory`, reader
+  `readEntries` – their prototypes are not globals in Chrome
 - `FileSystemFileHandle.prototype.getFile`
 
 ## Output
@@ -21,6 +23,15 @@ port arrives.
 ## Rules
 - Wrap getters with `Object.defineProperty` keeping the setter and flags;
   skip properties that are missing or non-configurable.
+- Methods (`wrapMethod`): return value → forward and return it (`getAsFile`);
+  callback → wrap only the success callback, same arguments, original return
+  (`withCallback`: entry `file`, `readEntries`, `getFile`/`getDirectory`);
+  Promise → return the **same** promise, forward from a side `.then` that also
+  swallows its rejection (`FileSystemFileHandle.getFile`; thenable check, not
+  `instanceof`).
+- Entry prototypes are wrapped once each, when the first object of that type
+  passes a hook, before the page receives it (`wrapOnce`, `WeakMap`).
+- `FileSystemFileHandle` may be missing (secure contexts only) → skipped.
 - Call the original, return its result unchanged, never throw, never await.
 - Forward each `File` object once (`WeakSet`).
 - No `chrome.*` (not available), no byte reading, no parsing.
@@ -29,4 +40,4 @@ port arrives.
 
 ## Tests
 `tests/browser/` (Vitest browser mode). `FileSystemFileHandle` via OPFS;
-`FileSystemFileEntry` via stand-in.
+entry chain (D36) via stand-ins; real folder drops: manual.

@@ -75,7 +75,8 @@ addressed by the planned per-site access status (see Future options).
 detached input, input inside a shadow DOM, drag & drop, paste, folder drop,
 File System Access API – the site's own code must obtain the `File` object
 through a handful of browser APIs (`HTMLInputElement.files`,
-`DataTransfer.files`, `DataTransferItem.getAsFile`, `FileSystemFileEntry.file`,
+`DataTransfer.files`, `DataTransferItem.getAsFile`, the folder-drop entries'
+`file()` (reached through `webkitGetAsEntry`),
 `FileSystemFileHandle.getFile`). The extension wraps these APIs **once, on
 their prototypes**, before any page script runs (`document_start`). The
 wrapper calls the original, notes the file, and returns **exactly** the

@@ -41,14 +41,22 @@ const fileInput = (files: File[]) => {
 };
 
 describe('installation', () => {
-  it('wraps both getters', () => {
-    expect(install()).toEqual(['HTMLInputElement.files', 'DataTransfer.files']);
+  it('wraps every hand-off API (the test page is a secure context, so FileSystemFileHandle exists)', () => {
+    expect(install()).toEqual([
+      'HTMLInputElement.files',
+      'DataTransfer.files',
+      'DataTransferItem.getAsFile',
+      'DataTransferItem.webkitGetAsEntry',
+      'FileSystemFileHandle.getFile',
+    ]);
   });
 
   it('skips a property the page has locked, without throwing', () => {
     const descriptor = Object.getOwnPropertyDescriptor(win.DataTransfer.prototype, 'files');
     Object.defineProperty(win.DataTransfer.prototype, 'files', { ...descriptor, configurable: false });
-    expect(install()).toEqual(['HTMLInputElement.files']);
+    const installed = install();
+    expect(installed).not.toContain('DataTransfer.files');
+    expect(installed).toContain('HTMLInputElement.files');
   });
 });
 
