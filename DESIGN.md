@@ -365,7 +365,7 @@ all jobs (it lives in the offscreen document); each job is isolated – an excep
 | `maxParallelExtractions` – PDFs parsed at once | 2 | CPU and memory spikes |
 | `maxInFlightMB` – total size of jobs being processed | 60 MB | CPU/memory of parsing many large files at once; extra jobs wait in a FIFO queue |
 | `maxQueuedMB` – total size of files received and not yet finished (processing + waiting) | 200 MB | Memory: bytes arrive with the request (they must, so scans survive the page closing – D17), so the queue itself needs a cap. Files above it are not scanned → `QUEUE_FULL` in the batch notification |
-| `jobTimeoutMs` – max time per job | 120 s | Stuck jobs; ends with `SCAN_TIMEOUT` |
+| `jobTimeoutMs` – max time per job, from its start (D38) | 120 s | Stuck jobs; ends with `SCAN_TIMEOUT` (the work is aborted) |
 
 **Scheduling.** One semaphore for API calls shared by all jobs; chunks are
 taken **round-robin across jobs**, so a 300-page PDF does not starve a 1-page
@@ -567,7 +567,7 @@ no rate limiting observed (`maxConcurrency` stays 4).
 | `maxParallelExtractions` | 2 | PDFs parsed at the same time |
 | `maxInFlightMB` | 60 | Total size of jobs being processed; more jobs wait |
 | `maxQueuedMB` | 200 | Total size received and not finished; above it → `QUEUE_FULL` |
-| `jobTimeoutMs` | 120000 | Per file, end to end |
+| `jobTimeoutMs` | 120000 | Per file, from the moment it starts running (queue waiting not counted, D38) |
 | `requestTimeoutMs` | 15000 | |
 | `retries` | 2 | Exponential backoff |
 | `maxFileSizeMB` | 25 | Allowed 1–45: files travel base64-encoded in one message (64 MB limit) |
@@ -720,7 +720,7 @@ TM_Chrome_ext/                     ← Git repository root (GitHub remote: origi
 │  ├─ content/      index.ts, pipeline.ts, bridge.ts, batcher.ts, pdf-filter.ts, encode.ts, scan-sender.ts
 │  ├─ background/   service-worker.ts, offscreen-manager.ts, settings-bridge.ts, script-registry.ts,
 │  │                notifications.ts
-│  ├─ offscreen/    offscreen.html, offscreen.ts, settings-client.ts, batch-receiver.ts, results.ts
+│  ├─ offscreen/    offscreen.html, offscreen.ts, settings-client.ts, batch-receiver.ts, jobs.ts, results.ts
 │  ├─ scanner/      extract.ts, chunker.ts, api-client.ts, parse.ts, aggregate.ts, mask.ts
 │  ├─ options/      options.html, options.ts, form.ts
 │  └─ shared/       settings.ts, messages.ts, types.ts, safe-logger.ts, scan-port.ts, notification-permission.ts
@@ -1035,6 +1035,7 @@ Decisions challenged before implementation (2026-10-14).
 | D35 | Offscreen document replies on the scan port: `BATCH_ACCEPTED` (all files received) and `BATCH_DONE` (all jobs ended, then port closed); the content script retries only before `BATCH_ACCEPTED` and reports `SCAN_INTERRUPTED` for a close after it | One-way port; infer from `onDisconnect` / Chrome's error text | `onDisconnect` looks the same for "never connected", "finished" and "crashed"; explicit replies make retry vs interrupted unambiguous. Replies carry no results (results never reach the page). |
 | D36 | Folder-drop entries hooked **lazily**: wrap `DataTransferItem.webkitGetAsEntry`; when an entry/reader passes, wrap its own prototype once (`file`, `createReader`, `getFile`, `getDirectory`, `readEntries`) before the page receives it | Wrap `FileSystemFileEntry.prototype.file` directly; drop folder-drop support | Found in step 4.2: Chrome does not expose `FileSystemEntry`/`FileSystemFileEntry`/`FileSystemDirectoryEntry` as globals, so the planned direct wrap is impossible. Folder drops stay covered at any depth. |
 | D37 | pdf.js **6.4.299**, pinned (`--save-exact`), **legacy build** (`pdfjs-dist/legacy/build/`) | Modern build; raise `minimum_chrome_version` | The modern build calls very new built-ins directly (e.g. `Map.prototype.getOrInsertComputed`, `Math.sumPrecise`, `Uint8Array.toHex`), missing in Chrome 120 – a crash on the first PDF. The legacy build adds core-js polyfills (~10–20 % larger) that only affect the offscreen document and its worker. Audit clean at install. |
+| D38 | `jobTimeoutMs` counts from the moment a job **starts running** – waiting in the queue is not counted. An unexpected exception inside a job ends that job with `SCAN_INTERRUPTED` | Count from arrival; new `SCAN_FAILED` code | During a burst of uploads, files would otherwise time out just from waiting; queue waiting is bounded by `maxQueuedMB`. One existing code ("the scan stopped unexpectedly – not checked") is enough for the user. |
 
 ---
 

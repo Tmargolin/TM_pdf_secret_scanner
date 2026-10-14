@@ -1,8 +1,9 @@
 # Offscreen document
 
 Purpose: owns every scan – jobs, limits, extraction, scanning, results.
-Files: `src/offscreen/offscreen.html`, `offscreen.ts` (wiring, job registry,
-limits), `batch-receiver.ts` (scan port: collect batch, `BATCH_ACCEPTED`,
+Files: `src/offscreen/offscreen.html`, `offscreen.ts` (wiring), `jobs.ts`
+(`createJobRegistry`: admission, queue cap, FIFO start by size, timeout,
+isolation), `results.ts` (`toShowResult`, `placeholderOutcome`), `batch-receiver.ts` (scan port: collect batch, `BATCH_ACCEPTED`,
 `runBatch`, `BATCH_DONE`, close), `settings-client.ts` (settings cache); uses
 `src/scanner/*`
 Design: `DESIGN.md` §2, §4, §4.1
@@ -28,13 +29,19 @@ Design: `DESIGN.md` §2, §4, §4.1
 - `fetch` to the API (via `src/scanner/api-client.ts`).
 
 ## Job model
-`{ scanId, batchId, tabId, frameId, origin, fileName, size, state }`,
-states `queued → extracting → scanning → done | failed`.
+`{ scanId, batchId, fileName, size, origin, tabId, frameId, state }`,
+states `queued → running → done | failed`. `submitBatch(batch)` → one
+`ScanResult` per file in batch order (never rejects) → one `SHOW_RESULT`.
 
-## Limits (global)
-`maxConcurrency`, `maxParallelExtractions`, `maxInFlightMB`, `maxQueuedMB`
-(→ `QUEUE_FULL`), `jobTimeoutMs` (→ `SCAN_TIMEOUT`). One shared pdf.js worker;
-destroy loading task when a job ends.
+## Limits (global, read from settings on every decision)
+- Arrival: `skipped` → `FILE_TOO_LARGE` at once; pending bytes + file >
+  `maxQueuedMB` → `QUEUE_FULL` at once (bytes dropped).
+- Start (FIFO): running bytes + file ≤ `maxInFlightMB`, or nothing running.
+- `jobTimeoutMs` from the job's start (D38) → `SCAN_TIMEOUT`, `AbortSignal`
+  aborted; the work must stop.
+- Exception in a job → `SCAN_INTERRUPTED` for that job only (D38).
+- Bytes released when the job starts work / ends.
+- `maxParallelExtractions`, one shared pdf.js worker: 5.4.
 
 ## Rules
 - Only `chrome.runtime` is available here (no `chrome.storage`, no notifications).
