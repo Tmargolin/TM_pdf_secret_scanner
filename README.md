@@ -150,6 +150,7 @@ test page with the **dev build**:
 |---|---|
 | `npm run serve:test-pages` | Test pages on `http://localhost:8080/upload.html` (`PAGES_PORT` to change; loopback only) |
 | `npm run mock-api` | Local mock of the Prompt Security API on `http://localhost:8787` |
+| `npm run fixtures` | Regenerates the sample PDFs in `tests/fixtures/` (a test checks they match) |
 
 **Planned:** automated end-to-end tests with Playwright – Chromium launched
 with the extension loaded, local test pages and a mock API.

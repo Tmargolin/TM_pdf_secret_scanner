@@ -15,7 +15,8 @@
     "test:coverage": "vitest run --coverage",
     "audit": "npm audit --audit-level=high",
     "mock-api": "node scripts/mock-api.mjs",
-    "serve:test-pages": "node scripts/serve-test-pages.mjs"
+    "serve:test-pages": "node scripts/serve-test-pages.mjs",
+    "fixtures": "node scripts/make-fixtures.ts"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.5",

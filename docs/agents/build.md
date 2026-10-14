@@ -13,7 +13,7 @@ Design: `DESIGN.md` §8 (permissions), §9, §10, §15
 | Icons | `icons/icon-{16,32,48,128}.png` → `dist/icons/` (manifest `icons`; notifications use 128) |
 | CI | `.github/workflows/ci.yml` |
 | Dependabot | `.github/dependabot.yml` |
-| Scripts | `scripts/probe-api.mjs`, `mock-api.mjs`, `make-fixtures.mjs`, `serve-test-pages.mjs` |
+| Scripts | `scripts/probe-api.mjs`, `mock-api.mjs`, `make-fixtures.ts`, `serve-test-pages.mjs` |
 
 ## Manifest rules
 - Permissions: `storage`, `offscreen`, `notifications`, `scripting`;
@@ -25,6 +25,8 @@ Design: `DESIGN.md` §8 (permissions), §9, §10, §15
 ## Rules
 - Never commit `dist/`, `node_modules/`, zips, or any APP-ID.
 - `probe-api.mjs` reads `PSS_APP_ID` from the environment; prints no secrets.
+- `make-fixtures.ts` (`npm run fixtures`): writes `tests/fixtures/*.pdf` by hand
+  (no library); re-run and commit after changing it.
 - `serve-test-pages.mjs` (`npm run serve:test-pages`): serves `test-pages/` on
   `127.0.0.1:8080` (`PAGES_PORT`); open as `http://localhost:…` (dev allow list).
 - `mock-api.mjs` (`npm run mock-api`): `http://localhost:8787/api/protect`; env
