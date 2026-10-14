@@ -58,6 +58,13 @@ extension. Scanning stops either way: PDFs are only checked on sites that are
 on the extension's list **and** granted. To clear the entry, remove the site
 in Chrome's *Site access* list yourself.
 
+**Known issue – restoring access to a revoked site:** if you revoke a site's
+access in Chrome (`chrome://extensions` → Details → *Site access*), the site
+stays on the extension's list but is no longer scanned, and the options page
+does not show this. Adding it again answers "already on the list". To restore
+scanning, **Remove** the site in the options page and **add** it again. To be
+addressed by the planned per-site access status (see Future options).
+
 ## Testing
 
 | Command | What it runs |

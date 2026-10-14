@@ -985,7 +985,9 @@ passes all tests.
 - A site on the allow list whose Chrome access was revoked or never granted is
   silently not scanned (§3.1: scripts run on allow list ∩ granted). Future
   feature: per-site status in the options page ("active" / "access not
-  granted") with a button that requests access again.
+  granted") with a button that requests access again. Until then (known
+  issue, seen in the step-3 checks): "Add" refuses a listed site, so a
+  revoked site is restored by Remove + Add (README).
 
 ---
 
