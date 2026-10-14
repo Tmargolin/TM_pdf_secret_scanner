@@ -99,6 +99,16 @@ with the extension loaded, local test pages and a mock API.
   input and checks the batch sent on the port. Planned with step 4, which
   replaces this entry with the hand-off hooks.
 
+**Options page – page wiring** (`src/options/options.ts`)
+
+- *Scenario not covered:* building the inputs, filling them, showing errors
+  under the fields, "Restore defaults", the show-APP-ID toggle and the
+  not-configured banner. The logic behind them (`form.ts`) is fully tested;
+  the wiring is checked manually (`docs/manual-tests.md`).
+- *Needed for a future fix:* a browser-mode test that loads `options.html`
+  with the chrome fake installed and drives the form (type, Save, read the
+  error texts and stored settings).
+
 **Scan sender – double finish guard** (`src/content/scan-sender.ts`,
 `if (settled) return`)
 
