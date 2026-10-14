@@ -22,7 +22,9 @@ Design: `DESIGN.md` §2, §4, §4.1
 - On the scan port: `BATCH_ACCEPTED` after `BATCH_END` with all files
   received; `BATCH_DONE` when every job of the batch ended, then
   `port.disconnect()`.
-- `SHOW_RESULT` (one per batch, masked findings only) → service worker.
+- `SHOW_RESULT` (one per batch, masked findings only) → service worker, sent
+  before `BATCH_DONE`. Built in `results.ts` (step 2: `placeholderResults` –
+  too-large files `FILE_TOO_LARGE`, others unscanned).
 - `fetch` to the API (via `src/scanner/api-client.ts`).
 
 ## Job model

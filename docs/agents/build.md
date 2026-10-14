@@ -10,6 +10,7 @@ Design: `DESIGN.md` §8 (permissions), §9, §10, §15
 | Dev flag in code | `__DEV__` (esbuild `define`; declared in `src/globals.d.ts`) |
 | Manifest | `manifest.json` (template; dev adds `http://localhost/*` + allow-list seed) |
 | Strings | `_locales/en/messages.json` |
+| Icons | `icons/icon-{16,32,48,128}.png` → `dist/icons/` (manifest `icons`; notifications use 128) |
 | CI | `.github/workflows/ci.yml` |
 | Dependabot | `.github/dependabot.yml` |
 | Scripts | `scripts/probe-api.mjs`, `mock-api.mjs`, `make-fixtures.mjs`, `serve-test-pages.mjs` |

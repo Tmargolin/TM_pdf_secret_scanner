@@ -1,10 +1,12 @@
 // Offscreen document – owns all scan work (DESIGN.md §2, docs/agents/offscreen.md).
 // Walking skeleton so far: settings handshake and receiving batches over the
-// scan port. Notifications per batch: 2.9; extraction and scanning: steps 5–6.
+// scan port, and one SHOW_RESULT per batch (placeholder results). Extraction
+// and scanning: steps 5–6.
 
 import { isFromExtensionContext } from '../shared/messages.ts';
 import { createLogger } from '../shared/safe-logger.ts';
 import { createBatchReceiver } from './batch-receiver.ts';
+import { placeholderResults, toShowResult } from './results.ts';
 import { createSettingsClient } from './settings-client.ts';
 
 const log = createLogger('offscreen', { dev: __DEV__ });
@@ -21,6 +23,12 @@ const batches = createBatchReceiver({
   async runBatch(batch) {
     await settings.ready(); // jobs wait for the settings handshake
     log.info('batch received', { files: batch.requests.length });
+    try {
+      // Wakes the service worker if it was stopped; it shows the notification.
+      await chrome.runtime.sendMessage(toShowResult(batch, placeholderResults(batch)));
+    } catch {
+      log.warn('result not delivered to the service worker');
+    }
   },
 });
 

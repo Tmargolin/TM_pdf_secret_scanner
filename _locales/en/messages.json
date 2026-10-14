@@ -4,5 +4,23 @@
   },
   "extDescription": {
     "message": "Warns you when a PDF you add to an allowed website contains secrets."
+  },
+  "skeletonBatchTitle": {
+    "message": "PDF Secret Scanner (preview)",
+    "description": "Walking-skeleton notification title; replaced by the result notifications in step 7."
+  },
+  "skeletonBatchMessage": {
+    "message": "Received $COUNT$ file(s) from $SITE$. Scanning is not implemented yet – nothing was checked.",
+    "description": "Walking-skeleton notification; replaced in step 7.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "2"
+      },
+      "site": {
+        "content": "$2",
+        "example": "mail.google.com"
+      }
+    }
   }
 }

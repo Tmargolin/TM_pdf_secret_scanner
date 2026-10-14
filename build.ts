@@ -42,6 +42,7 @@ await esbuild.build({
 });
 
 await cp('_locales', `${outdir}/_locales`, { recursive: true });
+await cp('icons', `${outdir}/icons`, { recursive: true });
 await cp('src/offscreen/offscreen.html', `${outdir}/offscreen/offscreen.html`);
 
 const manifest = createManifest(template, { mode, version: pkg.version });

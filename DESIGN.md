@@ -701,21 +701,22 @@ TM_Chrome_ext/                     ← Git repository root (GitHub remote: origi
 ├─ .gitattributes                  * text=auto eol=lf  (consistent line endings on Windows)
 ├─ manifest.json
 ├─ _locales/en/messages.json
+├─ icons/          icon-16/32/48/128.png (toolbar, extensions page, notifications)
 ├─ .github/        dependabot.yml, workflows/ci.yml
 ├─ package.json, package-lock.json, tsconfig.json, vitest.config.ts
 ├─ build.ts                        esbuild build script (Node runs TypeScript directly)
 ├─ src/
 │  ├─ main-world/   handoff-hooks.ts            (wrapped APIs, WeakSet, channel)
-│  ├─ content/      bridge.ts, batcher.ts, index.ts
+│  ├─ content/      bridge.ts, batcher.ts, index.ts, encode.ts, scan-sender.ts
 │  ├─ background/   service-worker.ts, offscreen-manager.ts, settings-bridge.ts, script-registry.ts,
 │  │                notifications.ts
-│  ├─ offscreen/    offscreen.html, offscreen.ts, settings-client.ts
+│  ├─ offscreen/    offscreen.html, offscreen.ts, settings-client.ts, batch-receiver.ts, results.ts
 │  ├─ scanner/      extract.ts, chunker.ts, api-client.ts, parse.ts, aggregate.ts, mask.ts
 │  ├─ options/      options.html, options.ts
-│  └─ shared/       settings.ts, messages.ts, types.ts, safe-logger.ts
+│  └─ shared/       settings.ts, messages.ts, types.ts, safe-logger.ts, scan-port.ts
 ├─ tests/
 │  ├─ fixtures/     api-*.json, sample PDFs
-│  ├─ helpers/      chrome-fake.ts
+│  ├─ helpers/      chrome-fake.ts, port-pair.ts
 │  ├─ unit/         *.test.ts        (Node)
 │  └─ browser/      *.test.ts        (Vitest browser mode, Chromium)
 ├─ scripts/        manifest.ts, probe-api.mjs, make-fixtures.mjs, serve-test-pages.mjs, mock-api.mjs

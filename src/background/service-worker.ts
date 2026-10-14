@@ -6,6 +6,7 @@
 import { isFromContentScript, isFromOffscreen, parseRuntimeMessage } from '../shared/messages.ts';
 import { createLogger } from '../shared/safe-logger.ts';
 import { chromeOffscreenApi, createOffscreenManager, OFFSCREEN_PATH } from './offscreen-manager.ts';
+import { chromeNotificationApi, createNotifier } from './notifications.ts';
 import { chromeScriptingApi, createScriptRegistry } from './script-registry.ts';
 import { createSettingsBridge } from './settings-bridge.ts';
 
@@ -17,6 +18,7 @@ const settings = createSettingsBridge({
   dev: __DEV__,
   log,
 });
+const notifier = createNotifier(chromeNotificationApi(), log);
 const scripts = createScriptRegistry({
   api: chromeScriptingApi(),
   storage: chrome.storage.local,
@@ -59,6 +61,11 @@ chrome.runtime.onMessage.addListener((raw, sender, sendResponse) => {
   if (message?.type === 'OFFSCREEN_READY' && isFromOffscreen(sender, extensionId, chrome.runtime.getURL(OFFSCREEN_PATH))) {
     settings.currentMessage().then(sendResponse, () => sendResponse(undefined));
     return true;
+  }
+
+  if (message?.type === 'SHOW_RESULT' && isFromOffscreen(sender, extensionId, chrome.runtime.getURL(OFFSCREEN_PATH))) {
+    void notifier.showBatchReceived(message);
+    return false; // display only, no reply
   }
 
   return false;
