@@ -101,6 +101,39 @@ describe('content-script registration', () => {
   });
 });
 
+describe('notifications blocked in Chrome', () => {
+  const BLOCKED = '[PSS:sw] notifications are blocked in Chrome – alerts will not be shown';
+
+  it('warns at start-up while blocked', async () => {
+    fake.notificationLevel = 'denied';
+    await startServiceWorker();
+    expect(console.warn).toHaveBeenCalledWith(BLOCKED);
+  });
+
+  it('does not warn at start-up while allowed', async () => {
+    await startServiceWorker();
+    expect(console.warn).not.toHaveBeenCalledWith(BLOCKED);
+  });
+
+  it('warns when the user turns notifications off, and stops when they are on again', async () => {
+    await startServiceWorker();
+    expect(fake.onNotificationLevelChanged.listeners).toHaveLength(1);
+    fake.onNotificationLevelChanged.dispatch('denied');
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    fake.onNotificationLevelChanged.dispatch('granted');
+    expect(console.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts normally when the level cannot be read', async () => {
+    Reflect.set(fake.chrome.notifications, 'getPermissionLevel', async () => {
+      throw new Error('not available');
+    });
+    await startServiceWorker();
+    expect(fake.offscreenDocuments).toHaveLength(1);
+    expect(console.error).not.toHaveBeenCalled();
+  });
+});
+
 describe('options page on install', () => {
   it('opens on the first install', async () => {
     await startServiceWorker();
