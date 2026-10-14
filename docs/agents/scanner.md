@@ -13,7 +13,7 @@ Design: `DESIGN.md` §4, §4.2, §5
 | `api-client.ts` | chunk → API response; timeout, retries, global limiter (round-robin), bounded splitting |
 | `parse.ts` | API JSON → findings (`result.prompt.findings.Secrets`) |
 | `aggregate.ts` | findings → de-duplicated findings with pages + `ScanResult` status |
-| `mask.ts` | secret → first 4 + `…` + last 2; < 12 chars fully masked |
+| `mask.ts` | secret → first 4 + `…` + last 2; < 12 chars → `FULLY_MASKED` (`••••••`); output must pass `isMaskedValue` (`messages.ts`) |
 
 ## Rules
 - Chunk ends only at whitespace (blank line > line break > space); never inside

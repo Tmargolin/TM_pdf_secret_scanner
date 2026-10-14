@@ -112,7 +112,9 @@ nothing is lost.
    `SETTINGS_UPDATED`.
 3. **Scan:** content script → `chrome.runtime.connect({name: 'scan-batch'})`.
    Only the offscreen document listens for these ports; it reads `tabId`,
-   `frameId` and the site's origin from `port.sender` and runs the jobs.
+   `frameId` and the site's origin from `port.sender` and runs the jobs. After
+   the last file the content script sends `BATCH_END { fileCount }`, so the
+   offscreen document knows when the batch is complete.
 4. **Result:** when all jobs of a batch end, the offscreen document sends one
    `SHOW_RESULT` message (masked findings only) to the service worker (woken
    by it if stopped), which calls `chrome.notifications.create`. The result
@@ -315,8 +317,8 @@ type ScanResult = {
     masked: string;       // "AKIA…B1" (first 4 + last 2, §8)
     pages: number[];      // [3]; empty if the entity text can't be located
   }>;
-  errors: Array<{ code: ErrorCode; message: string }>;
-  stats: { pages: number; chunks: number; failedChunks: number;
+  errors: Array<{ code: ErrorCode; detail?: string }>;   // text comes from _locales by code
+  stats?: { pages: number; chunks: number; failedChunks: number;   // absent if never scanned
            textChars: number; scannedChars: number; truncated: boolean; ms: number };
 };
 
@@ -633,8 +635,10 @@ page).
 **Secrets passing through the extension**
 - Secret values (returned in plain text by the API) and PDF text live **only in
   the offscreen document's memory** and are dropped when the job ends. Never
-  stored, never shown unmasked. Mask = first 4 + `…` + last 2; values shorter
-  than 12 characters fully masked (notifications may persist in OS history).
+  stored, never shown unmasked. Mask = first 4 + `…` + last 2 (`AKIA…B1`);
+  values shorter than 12 characters are shown as `••••••` (notifications may
+  persist in OS history). Receivers accept only these two forms
+  (`isMaskedValue`), so an unmasked value can never reach a notification.
 - **Logging rule:** a single `safeLogger` is the only way to log. It never
   outputs PDF text, request/response bodies, secret values or the APP-ID – also
   not in debug builds. API error bodies are never shown raw (they may echo our
@@ -985,7 +989,7 @@ Decisions challenged before implementation (2026-10-14).
 | D15 | Verdict = `result.prompt.findings.Secrets` non-empty | `action` / `passed` / `violations` | `action` reflects the server-side policy across all detectors: Sensitive Data or Token Limitation set to block would cause false alarms, Secrets set to log would silently miss secrets. Findings are also needed for the alert content. |
 | D16 | Alerts = **Chrome system notifications only** | In-page overlay; overlay with fallbacks (top frame / notification) | One mechanism that works in every case (page open, iframe, navigated, tab closed) – simple and consistent. Cost: less contextual, short text, depends on OS notification settings (checked and documented). |
 | D17 | **Don't cancel** scans when the page disconnects | Cancel on disconnect | "Upload and leave" would otherwise silently drop a positive result. Scans end only on completion or `jobTimeoutMs`. |
-| D18 | Mask = first 4 + last 2; < 12 chars fully masked | First 4 + last 4 | Notifications may show on the lock screen and persist in OS history; 6 visible characters still identify which key to rotate. |
+| D18 | Mask = first 4 + `…` + last 2; < 12 chars → `••••••`; enforced by `isMaskedValue` | First 4 + last 4 | Notifications may show on the lock screen and persist in OS history; 6 visible characters still identify which key to rotate. |
 | D19 | Security hardening: safe logger, pdf.js `isEvalSupported:false` + pinned version + audit + Dependabot, sender/message validation, file-name sanitising, no `externally_connectable` | – | Small, concrete mitigations for the main attack surfaces. |
 | D20 | Documented, not implemented in v1: incognito (disabled), managed storage, per-tab rate limiting (DoS), first-run notice | Implement now | Keep v1 scope; risks are stated in the README (§14). |
 | D21 | **Site allow list** in v1 (empty by default), via dynamic content scripts + optional per-site host permissions | Scan all sites; block list | Limits which documents ever reach the vendor; the user consents per site; removes the "all websites" install warning. Cost: sites not on the list are unprotected; iframes need their own entry; open tabs need a reload. Supersedes the earlier "all websites" scope decision. |
