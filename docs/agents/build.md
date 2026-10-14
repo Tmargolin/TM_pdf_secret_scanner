@@ -25,6 +25,8 @@ Design: `DESIGN.md` §8 (permissions), §9, §10, §15
 ## Rules
 - Never commit `dist/`, `node_modules/`, zips, or any APP-ID.
 - `probe-api.mjs` reads `PSS_APP_ID` from the environment; prints no secrets.
+- `serve-test-pages.mjs` (`npm run serve:test-pages`): serves `test-pages/` on
+  `127.0.0.1:8080` (`PAGES_PORT`); open as `http://localhost:…` (dev allow list).
 - `mock-api.mjs` (`npm run mock-api`): `http://localhost:8787/api/protect`; env
   `MOCK_PORT`, `MOCK_APP_ID` (only accepted APP-ID, default `mock-app-id`;
   others → 401), `MOCK_SCAN_WINDOW` (default 131072, text beyond is

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PDF Secret Scanner – test page</title>
+  <link rel="icon" href="data:,"> <!-- no favicon request (avoids a 404 in the console) -->
+  <style>
+    body { font: 15px/1.5 system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; color: #1b2733; }
+    section { border: 1px solid #c9d3de; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+    h2 { font-size: 1rem; margin: 0 0 .5rem; }
+    p.note { color: #55636f; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <h1>PDF Secret Scanner – test page</h1>
+  <p class="note">
+    Local page for manual tests (docs/manual-tests.md). Open it as
+    <code>http://localhost:&lt;port&gt;/upload.html</code> with a <b>dev build</b> loaded –
+    only <code>localhost</code> is on the dev allow list (not 127.0.0.1).
+    Nothing is uploaded: the files stay in this page.
+  </p>
+
+  <section>
+    <h2>1. Single file</h2>
+    <input id="single" type="file" accept=".pdf,application/pdf">
+  </section>
+
+  <section>
+    <h2>2. Several files</h2>
+    <input id="multiple" type="file" multiple>
+  </section>
+
+  <p class="note">
+    Step 4 adds detached inputs, shadow DOM, drag &amp; drop, paste, folder drop and
+    showOpenFilePicker.
+  </p>
+</body>
+</html>

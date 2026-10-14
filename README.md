@@ -59,8 +59,14 @@ settings with their defaults.
 
 CI (GitHub Actions) runs all of the above plus both builds on every push.
 
-Manual tests (real API, real websites, OS notifications) follow
-`docs/manual-tests.md` *(added in step 2)*.
+Manual tests (real Chrome, OS notifications; later the real API and real
+websites) follow [docs/manual-tests.md](docs/manual-tests.md). They use a local
+test page with the **dev build**:
+
+| Command | What it runs |
+|---|---|
+| `npm run serve:test-pages` | Test pages on `http://localhost:8080/upload.html` (`PAGES_PORT` to change; loopback only) |
+| `npm run mock-api` | Local mock of the Prompt Security API on `http://localhost:8787` |
 
 **Planned:** automated end-to-end tests with Playwright – Chromium launched
 with the extension loaded, local test pages and a mock API.
@@ -81,6 +87,27 @@ with the extension loaded, local test pages and a mock API.
   (for example a `failNextGet` option); then, in `service-worker.test.ts`,
   send `OFFSCREEN_READY` from the offscreen document's sender and check that
   `sendResponse` is called with `undefined`.
+
+**Content script entry – page wiring** (`src/content/index.ts`)
+
+- *Scenario not covered:* the `change` listener on `<input type="file">`,
+  turning the selected files into a batch and calling `chrome.runtime`. The
+  modules it uses (`encode.ts`, `scan-sender.ts`) are fully tested; the wiring
+  itself is checked manually (`docs/manual-tests.md`, step 2).
+- *Needed for a future fix:* a browser-mode test (`tests/browser/`) that
+  loads the entry with the chrome fake installed, selects files in a real
+  input and checks the batch sent on the port. Planned with step 4, which
+  replaces this entry with the hand-off hooks.
+
+**Scan sender – double finish guard** (`src/content/scan-sender.ts`,
+`if (settled) return`)
+
+- *Scenario not covered:* one try finishing twice (e.g. `BATCH_DONE` and a
+  disconnect both reported). Chrome never fires `onDisconnect` on the end that
+  called `disconnect()`, so this cannot happen with the real API or the
+  faithful port fake; the guard is defensive.
+- *Needed for a future fix:* none unless the port behaviour changes; a test
+  would need a port fake that breaks Chrome's rules.
 
 ## Privacy and security (summary)
 

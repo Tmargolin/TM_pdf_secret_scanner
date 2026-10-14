@@ -130,12 +130,14 @@ nothing is lost.
    document died mid-scan), the content script sends `SCAN_INTERRUPTED` to the
    service worker → failure notification. No matching of Chrome's error text.
 
-To verify in step 2 (walking skeleton): (a) content-script ports reach the offscreen document's
-`runtime.onConnect` directly (expected per Chrome messaging rules); (b)
-extension messaging still JSON-serialises payloads – if Chrome now supports
-structured cloning, send the bytes directly and drop base64. Fallback if
-(a) fails: the service worker relays the scan messages (it would be back on the scan
-path; resilience then relies on the `SCAN_INTERRUPTED` handling).
+**Verified in step 2 (2026-10-14, Chrome on Windows, `docs/manual-tests.md`
+checks 2.3–2.7):** (a) content-script ports reach the offscreen document's
+`runtime.onConnect` **directly** – the service worker is not involved; after
+the offscreen document was closed, `ENSURE_OFFSCREEN` re-created it and the
+resent batch completed. (b) Extension messaging **still JSON-serialises**
+payloads: a `Uint8Array` arrives as `{"0":1,"1":2,"2":3}` and an `ArrayBuffer`
+as `{}` – bytes therefore keep travelling as base64. The planned fallback
+(service worker relaying scan messages) is not needed.
 
 Notifications are shown by the service worker because the offscreen document
 can only use `chrome.runtime`. This is display only: one short event per
