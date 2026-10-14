@@ -35,10 +35,14 @@ await esbuild.build({
   format: 'esm',
 });
 
-// Content scripts are classic scripts (no import/export): wrap each in a function.
+// Content scripts (isolated and MAIN world) are classic scripts (no
+// import/export): wrap each in a function.
 await esbuild.build({
   ...common,
-  entryPoints: { 'content/content': 'src/content/index.ts' },
+  entryPoints: {
+    'content/content': 'src/content/index.ts',
+    'main-world/hooks': 'src/main-world/index.ts',
+  },
   format: 'iife',
 });
 

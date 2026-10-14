@@ -11,23 +11,28 @@ import { loadSettings, STORAGE_KEY, type SettingsStorage } from '../shared/setti
 
 type ContentScript = chrome.scripting.RegisteredContentScript;
 
-/** Id and built file of the isolated-world content script (see build.ts). */
+/** Ids and built files of the scripts we register (see build.ts). */
+export const HOOKS_SCRIPT_ID = 'pss-hooks';
+export const HOOKS_SCRIPT_FILE = 'main-world/hooks.js';
 export const CONTENT_SCRIPT_ID = 'pss-content';
 export const CONTENT_SCRIPT_FILE = 'content/content.js';
 
-/** The scripts we register for the given match patterns. MAIN-world hooks join in step 4. */
+/**
+ * The scripts we register for the given match patterns: the hand-off hooks in
+ * the page's MAIN world, and the isolated content script. Same sites, same
+ * timing (document_start), every frame.
+ */
 export function scriptsFor(matches: string[]): ContentScript[] {
+  const common = {
+    matches,
+    runAt: 'document_start',
+    allFrames: true,
+    matchOriginAsFallback: true,
+    persistAcrossSessions: true,
+  } as const;
   return [
-    {
-      id: CONTENT_SCRIPT_ID,
-      js: [CONTENT_SCRIPT_FILE],
-      matches,
-      world: 'ISOLATED',
-      runAt: 'document_start',
-      allFrames: true,
-      matchOriginAsFallback: true,
-      persistAcrossSessions: true,
-    },
+    { id: HOOKS_SCRIPT_ID, js: [HOOKS_SCRIPT_FILE], world: 'MAIN', ...common },
+    { id: CONTENT_SCRIPT_ID, js: [CONTENT_SCRIPT_FILE], world: 'ISOLATED', ...common },
   ];
 }
 

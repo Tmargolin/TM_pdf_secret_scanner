@@ -716,7 +716,7 @@ TM_Chrome_ext/                     ← Git repository root (GitHub remote: origi
 ├─ package.json, package-lock.json, tsconfig.json, vitest.config.ts
 ├─ build.ts                        esbuild build script (Node runs TypeScript directly)
 ├─ src/
-│  ├─ main-world/   handoff-hooks.ts            (wrapped APIs, WeakSet, channel)
+│  ├─ main-world/   handoff-hooks.ts (wrapped APIs, WeakSet), channel.ts, index.ts
 │  ├─ content/      bridge.ts, batcher.ts, index.ts, encode.ts, scan-sender.ts
 │  ├─ background/   service-worker.ts, offscreen-manager.ts, settings-bridge.ts, script-registry.ts,
 │  │                notifications.ts

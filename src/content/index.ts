@@ -2,11 +2,13 @@
 // Registered by the service worker for allow-listed sites (script-registry.ts).
 //
 // Walking skeleton: files chosen in an <input type="file"> are sent to the
-// offscreen document as one batch. Step 4 replaces this with the MAIN-world
-// hand-off hooks, the PDF filter and batching by time.
+// offscreen document as one batch. Since 4.4 the MAIN-world hooks also hand
+// every File over the bridge – logged only for now; 4.5 switches sending to
+// them (PDF filter, batching by time) and removes the change listener.
 
 import { LIMITS, SCAN_PORT_NAME } from '../shared/messages.ts';
 import { createLogger } from '../shared/safe-logger.ts';
+import { openBridge } from './bridge.ts';
 import { toScanRequest } from './encode.ts';
 import { createScanSender } from './scan-sender.ts';
 
@@ -51,5 +53,8 @@ document.addEventListener(
   },
   true,
 );
+
+// Files obtained by the page, from the MAIN-world hooks (4.4: logged only).
+openBridge(window, (file) => log.debug('file handed to the page', { bytes: file.size }));
 
 log.debug('content script loaded');

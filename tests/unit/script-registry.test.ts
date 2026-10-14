@@ -4,6 +4,8 @@ import {
   chromeScriptingApi,
   CONTENT_SCRIPT_FILE,
   CONTENT_SCRIPT_ID,
+  HOOKS_SCRIPT_FILE,
+  HOOKS_SCRIPT_ID,
   createScriptRegistry,
   scriptsFor,
   type ScriptingApi,
@@ -45,25 +47,26 @@ function setup(options: { dev?: boolean; api?: ScriptingApi } = {}) {
   return { registry, lines };
 }
 
-const registeredMatches = () => fake.registeredScripts.map((s) => s.matches);
+/** Matches of the isolated content script (the hooks script always has the same – see scriptsFor). */
+const registeredMatches = () => fake.registeredScripts.filter((s) => s.id === CONTENT_SCRIPT_ID).map((s) => s.matches);
 
 describe('scriptsFor', () => {
-  it('describes the isolated content script with the options from DESIGN §3.1', () => {
+  it('describes the MAIN-world hooks and the isolated content script with the options from DESIGN §3.1', () => {
+    const common = {
+      matches: [MAIL],
+      runAt: 'document_start',
+      allFrames: true,
+      matchOriginAsFallback: true,
+      persistAcrossSessions: true,
+    };
     expect(scriptsFor([MAIL])).toEqual([
-      {
-        id: CONTENT_SCRIPT_ID,
-        js: [CONTENT_SCRIPT_FILE],
-        matches: [MAIL],
-        world: 'ISOLATED',
-        runAt: 'document_start',
-        allFrames: true,
-        matchOriginAsFallback: true,
-        persistAcrossSessions: true,
-      },
+      { id: HOOKS_SCRIPT_ID, js: [HOOKS_SCRIPT_FILE], world: 'MAIN', ...common },
+      { id: CONTENT_SCRIPT_ID, js: [CONTENT_SCRIPT_FILE], world: 'ISOLATED', ...common },
     ]);
   });
 
-  it('points at the file the build produces', () => {
+  it('points at the files the build produces', () => {
+    expect(HOOKS_SCRIPT_FILE).toBe('main-world/hooks.js');
     expect(CONTENT_SCRIPT_FILE).toBe('content/content.js');
   });
 });
@@ -140,7 +143,7 @@ describe('keeping the registration in step', () => {
     fake.grantedOrigins.push(MAIL);
     const { registry, lines } = setup();
     await Promise.all([registry.reconcile(), registry.reconcile(), registry.reconcile()]);
-    expect(fake.registeredScripts).toHaveLength(1);
+    expect(fake.registeredScripts.map((s) => s.id)).toEqual([HOOKS_SCRIPT_ID, CONTENT_SCRIPT_ID]);
     expect(fake.scriptingCalls.filter((c) => c.method === 'register')).toHaveLength(1);
     expect(lines.filter((l) => l.level === 'error')).toEqual([]);
   });

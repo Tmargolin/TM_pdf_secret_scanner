@@ -82,7 +82,10 @@ describe('content-script registration', () => {
     expect(fake.registeredScripts).toEqual([]); // not at every start-up
     fake.onInstalled.dispatch(INSTALLED.update);
     await flushAsync();
-    expect(fake.registeredScripts.map((s) => s.matches)).toEqual([['http://localhost/*']]);
+    expect(fake.registeredScripts.map((s) => [s.id, s.matches])).toEqual([
+      ['pss-hooks', ['http://localhost/*']],
+      ['pss-content', ['http://localhost/*']],
+    ]);
   });
 
   it('registers nothing on install when no allow-listed site is granted', async () => {
@@ -163,14 +166,15 @@ describe('options page on install', () => {
     await flushAsync();
     expect(console.warn).toHaveBeenCalledWith('[PSS:sw] options page could not be opened', expect.anything());
     expect(fake.offscreenDocuments).toHaveLength(1);
-    expect(fake.registeredScripts).toHaveLength(1);
+    expect(fake.registeredScripts).toHaveLength(2); // hooks + content script
   });
 });
 
 describe('reconcile triggers (step 3)', () => {
   const EXAMPLE = '*://example.com/*';
   const LOCALHOST = 'http://localhost/*';
-  const matches = () => fake.registeredScripts.map((s) => s.matches);
+  /** Matches of the content script (the hooks script always has the same). */
+  const matches = () => fake.registeredScripts.filter((s) => s.id === 'pss-content').map((s) => s.matches);
   /** Options-page code running against the same fake (other context, same chrome.* state). */
   const optionsPage = async () => {
     const { addSite, removeSite, chromePermissionsApi } = await import('../../src/options/sites.ts');

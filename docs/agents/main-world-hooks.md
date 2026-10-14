@@ -2,8 +2,9 @@
 
 Purpose: see every `File` a page obtains; forward it to the content script.
 Files: `src/main-world/handoff-hooks.ts` (`installHooks(win, forward)` – wraps
-the prototypes of `win`; returns the wrapped API names). Entry script,
-MessageChannel hand-over and registration: step 4.4.
+the prototypes of `win`; returns the wrapped API names), `channel.ts`
+(`createMainWorldChannel`: takes the port, buffers ≤ 100 files until then),
+`index.ts` (entry → `dist/main-world/hooks.js`, script id `pss-hooks`).
 Design: `DESIGN.md` §3
 
 ## Wrapped APIs
@@ -17,8 +18,10 @@ Design: `DESIGN.md` §3
 
 ## Output
 `File` objects → content script over the `MessageChannel` port received at
-`document_start` (marker message from the content script). Buffer until the
-port arrives.
+`document_start` (marker message from the content script, `event.source ===
+window`). First marked port wins; the port message is stopped in the capture
+phase so later page listeners do not see it. Buffer (≤ 100) until the port
+arrives. Nothing is logged in the page's world.
 
 ## Rules
 - Wrap getters with `Object.defineProperty` keeping the setter and flags;
