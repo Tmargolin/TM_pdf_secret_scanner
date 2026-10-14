@@ -1,8 +1,16 @@
 import { readFileSync } from 'node:fs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { describe, expect, it } from 'vitest';
-import { buildFixtures, FIXTURES } from '../../scripts/make-fixtures.ts';
-import { DOCUMENT_OPTIONS, extractText, joinTextItems, type PdfJs } from '../../src/scanner/extract.ts';
+import { buildFixtures, buildPdf, FIXTURES } from '../../scripts/make-fixtures.ts';
+import {
+  classifyPdfError,
+  DOCUMENT_OPTIONS,
+  extractPages,
+  extractText,
+  hasTextLayer,
+  joinTextItems,
+  type PdfJs,
+} from '../../src/scanner/extract.ts';
 
 const fixture = (name: string) => new Uint8Array(readFileSync(new URL(`../fixtures/${name}`, import.meta.url)));
 
@@ -114,5 +122,91 @@ describe('joinTextItems', () => {
 
   it('no items: empty text', () => {
     expect(joinTextItems([])).toBe('');
+  });
+});
+
+describe('extractPages – files that cannot be scanned (5.2)', () => {
+  it('a password-protected PDF → PDF_ENCRYPTED', async () => {
+    expect(await extractPages(pdfjs, fixture('encrypted.pdf'))).toEqual({ ok: false, code: 'PDF_ENCRYPTED' });
+  });
+
+  it('the encrypted fixture is real encryption: with the password, pdf.js reads it', async () => {
+    const task = pdfjs.getDocument({ data: fixture('encrypted.pdf'), password: 'secret', ...DOCUMENT_OPTIONS });
+    try {
+      const page = await (await task.promise).getPage(1);
+      expect(joinTextItems((await page.getTextContent()).items)).toBe('Behind a password: AKIAIOSFODNN7EXAMPLE');
+    } finally {
+      await task.destroy();
+    }
+  });
+
+  it('encrypted with an owner password only (no password needed to open) → scanned normally', async () => {
+    expect(await extractPages(pdfjs, fixture('owner-password-only.pdf'))).toEqual({ ok: true, pages: ['Restricted, but readable'] });
+  });
+
+  it('a page that only draws shapes (like a scan) → NO_TEXT_LAYER', async () => {
+    expect(await extractPages(pdfjs, fixture('no-text.pdf'))).toEqual({ ok: false, code: 'NO_TEXT_LAYER' });
+  });
+
+  it('text that is only whitespace → NO_TEXT_LAYER', async () => {
+    expect(await extractPages(pdfjs, buildPdf([['   '], ['  ']]))).toEqual({ ok: false, code: 'NO_TEXT_LAYER' });
+  });
+
+  it('an empty page next to pages with text → scanned (page numbers kept)', async () => {
+    expect(await extractPages(pdfjs, fixture('empty-page-between.pdf'))).toEqual({
+      ok: true,
+      pages: ['Before the empty page', '', 'After the empty page'],
+    });
+  });
+
+  const multiPage = fixture('multi-page.pdf');
+  it.each([
+    ['garbage after %PDF-', new TextEncoder().encode('%PDF-1.4\nthis is not really a pdf\n')],
+    ['a truncated file (60 %)', multiPage.slice(0, Math.floor(multiPage.length * 0.6))],
+    ['only the header', new TextEncoder().encode('%PDF-1.7')],
+    ['zero bytes', new Uint8Array(0)],
+  ])('%s → PDF_INVALID', async (_name, bytes) => {
+    expect(await extractPages(pdfjs, bytes)).toEqual({ ok: false, code: 'PDF_INVALID' });
+  });
+
+  it('never throws – not even if pdf.js itself throws at once', async () => {
+    const broken: PdfJs = {
+      getDocument: (() => {
+        throw new Error('worker could not start');
+      }) as PdfJs['getDocument'],
+    };
+    await expect(extractPages(broken, fixture('one-page.pdf'))).resolves.toEqual({ ok: false, code: 'PDF_INVALID' });
+  });
+
+  it('destroys the document also when classifying a failure', async () => {
+    const { recording, calls } = recordingPdfJs();
+    await extractPages(recording, fixture('encrypted.pdf'));
+    expect(calls[0]?.destroyed).toBe(true);
+  });
+});
+
+describe('classifyPdfError', () => {
+  it.each([
+    [{ name: 'PasswordException', code: 1 }, 'PDF_ENCRYPTED'],
+    [{ name: 'PasswordException', code: 2 }, 'PDF_ENCRYPTED'],
+    [{ name: 'InvalidPDFException' }, 'PDF_INVALID'],
+    [{ name: 'UnknownErrorException' }, 'PDF_INVALID'],
+    [new Error('anything'), 'PDF_INVALID'],
+    ['a string', 'PDF_INVALID'],
+    [null, 'PDF_INVALID'],
+    [undefined, 'PDF_INVALID'],
+  ])('%j → %s', (error, code) => {
+    expect(classifyPdfError(error)).toBe(code);
+  });
+});
+
+describe('hasTextLayer', () => {
+  it.each([
+    [['text'], true],
+    [['', ' x '], true],
+    [[], false],
+    [['', '   ', '\n\t'], false],
+  ])('%j → %s', (pages, expected) => {
+    expect(hasTextLayer(pages)).toBe(expected);
   });
 });
