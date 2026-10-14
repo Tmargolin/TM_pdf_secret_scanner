@@ -2,7 +2,7 @@
 
 Purpose: turn forwarded files into scan batches and send them to the offscreen
 document. No UI.
-Files: `src/content/index.ts` (entry, built to `content/content.js`, classic script), `encode.ts` (File → `SCAN_REQUEST`, base64), `scan-sender.ts` (port, replies, retry, `SCAN_INTERRUPTED`), `bridge.ts` (`openBridge`: MessageChannel, posts port2 with the marker, accepts only `File` instances), `batcher.ts` (`createBatcher`: 300 ms window from the first file, ≤ 100), `pdf-filter.ts` (`isPdf`: first 5 bytes `%PDF-`; `keepPdfs`)
+Files: `src/content/index.ts` (entry, built to `content/content.js`, classic script; builds the chrome.* deps only), `pipeline.ts` (`startContentScript(deps)`: bridge → batcher → PDF → size → encode → sender; all deps injected), `encode.ts` (File → `SCAN_REQUEST`, base64), `scan-sender.ts` (port, replies, retry, `SCAN_INTERRUPTED`), `bridge.ts` (`openBridge`: MessageChannel, posts port2 with the marker, accepts only `File` instances), `batcher.ts` (`createBatcher`: 300 ms window from the first file, ≤ 100), `pdf-filter.ts` (`isPdf`: first 5 bytes `%PDF-`; `keepPdfs`)
 Design: `DESIGN.md` §3, §2 (message flows)
 
 ## Input
