@@ -101,6 +101,39 @@ describe('content-script registration', () => {
   });
 });
 
+describe('options page on install', () => {
+  it('opens on the first install', async () => {
+    await startServiceWorker();
+    fake.onInstalled.dispatch(INSTALLED.install);
+    await flushAsync();
+    expect(fake.optionsPageOpened).toBe(1);
+  });
+
+  it.each([
+    ['an extension update or reload', INSTALLED.update],
+    ['a Chrome update', { reason: 'chrome_update' } as const],
+  ])('does not open on %s', async (_name, details) => {
+    await startServiceWorker();
+    fake.onInstalled.dispatch(details);
+    await flushAsync();
+    expect(fake.optionsPageOpened).toBe(0);
+  });
+
+  it('still sets everything up on install, also when the page cannot be opened', async () => {
+    fake.grantedOrigins.push('http://localhost/*');
+    await startServiceWorker();
+    fake.offscreenDocuments.length = 0;
+    Reflect.set(fake.chrome.runtime, 'openOptionsPage', async () => {
+      throw new Error('Could not create an options page.');
+    });
+    fake.onInstalled.dispatch(INSTALLED.install);
+    await flushAsync();
+    expect(console.warn).toHaveBeenCalledWith('[PSS:sw] options page could not be opened', expect.anything());
+    expect(fake.offscreenDocuments).toHaveLength(1);
+    expect(fake.registeredScripts).toHaveLength(1);
+  });
+});
+
 describe('reconcile triggers (step 3)', () => {
   const EXAMPLE = '*://example.com/*';
   const LOCALHOST = 'http://localhost/*';
