@@ -22,7 +22,7 @@ Status: **design approved – ready for implementation (step 0)**
 | Alerts | **Chrome system notifications only** – one place that works whether the page is still open, the upload was in an iframe, or the tab is gone (§7) |
 | What triggers a scan | A PDF **handed to the page** (the page's JavaScript obtained the `File`), not a network upload |
 | Threat model | Protects the user from **accidental** leaks; does not defend against a site deliberately evading the extension (§8) |
-| API size limit | Unknown → chunk size **configurable**, default set after probing (step 1); bounded automatic shrinking on "too large" (§4.2) |
+| API size limit | The API **silently stops scanning** somewhere between 128k and 256k characters (HTTP 200, no error) – measured in step 1 (§5). Chunks default to **32,000 characters** (max 50,000); bounded automatic shrinking if the API reports fewer characters than sent (§4.2) |
 | Very large text | Scan the first `maxTextChars` and warn "partially scanned" (§4.2) |
 | Where pdf.js runs | **Offscreen document** (not the service worker, not the content script) – see §13 |
 | Offscreen lifecycle | v1: **always present** while the extension runs; lazy creation + idle close is a later step (step 10) |
@@ -323,7 +323,7 @@ type ScanResult = {
 type ErrorCode =
   | 'NOT_CONFIGURED' | 'FILE_TOO_LARGE' | 'PDF_ENCRYPTED' | 'PDF_INVALID'
   | 'NO_TEXT_LAYER' | 'API_UNREACHABLE' | 'API_TIMEOUT' | 'API_HTTP_ERROR'
-  | 'API_BAD_RESPONSE' | 'SCAN_INTERRUPTED' | 'SCAN_TIMEOUT'
+  | 'API_BAD_RESPONSE' | 'API_UNAUTHORIZED' | 'SCAN_INTERRUPTED' | 'SCAN_TIMEOUT'
   | 'TEXT_TRUNCATED' | 'CHUNK_TOO_LARGE' | 'QUEUE_FULL';
 ```
 
@@ -424,10 +424,11 @@ split). Each request is also checked against `maxRequestBytes` (UTF-8 size of
 the JSON body); a chunk over it is split before sending. This keeps Hebrew and
 other multi-byte text safe.
 
-**Bounded automatic shrinking** (unknown API limit):
-- If the API rejects a chunk as too large (HTTP 413, or a size-related error
-  identified during probing), the chunk is split in half at the best boundary
-  and both halves are retried.
+**Bounded automatic shrinking** (the API never reports "too large" – §5):
+- A chunk counts as **cut short** if the response's
+  `Token Limitation[0].characters` is smaller than the number of characters we
+  sent, or the API answers HTTP 413. A cut-short chunk is split in half at the
+  best boundary and both halves are retried.
 - The **effective chunk size** for the rest of the session becomes the smaller
   size, so later chunks don't fail the same way. It resets to `chunkSize` when
   settings change or the offscreen document restarts.
@@ -436,15 +437,18 @@ other multi-byte text safe.
   at the floor fails with `CHUNK_TOO_LARGE` (counted in `failedChunks`).
 - Splitting depth is therefore bounded (≤ log₂(`chunkSize` / 500) levels),
   and each split counts against the job's API calls and `jobTimeoutMs`.
-- `chunkSize` set in options is validated to 500 … 64,000
-  (`MAX_CHUNK_CHARS`).
+- `chunkSize` set in options is validated to 500 … 50,000
+  (`MAX_CHUNK_CHARS`) – well below the size where the API stops scanning.
+- **Empty or whitespace-only chunks are never sent** (the API returns
+  `result.prompt: null` for them).
 
 **Telemetry:** `Token Limitation[0].chunks_required > 1` in a response → console
 warning (our chunk is larger than the server prefers) – used for tuning.
 
-**Default size:** 4,000 is provisional. Step 1 probes the API with growing
-sizes (4k, 8k, 16k, 32k, 64k; ASCII and Hebrew) and sets the defaults for
-`chunkSize` and `maxRequestBytes`, recorded in §5.
+**Defaults (from the step-1 probe, §5):** `chunkSize` **32,000** characters –
+4× below the largest English size proven to be scanned completely (128k);
+`maxRequestBytes` **64 KB** – keeps Hebrew chunks (≈ 2 bytes per character)
+at ≈ 35k characters, below the 64k proven for Hebrew.
 
 ---
 
@@ -496,11 +500,46 @@ Parsing rules:
   than the server prefers); useful for tuning the default.
 - Other finding groups (e.g. "Sensitive Data") are ignored in v1.
 
-Probing results (sizes, the exact "too large" response) are recorded here in step 1.
+### Probing results (2026-10-14, `scripts/probe-api.mjs`)
 
-Still to verify (step 1): behaviour with an invalid APP-ID, malformed body,
-very large payloads (find the real size limit), rate limiting (HTTP 429?), and
-which other secret types appear under `Secrets` (GitHub tokens, private keys…).
+Raw output (no secrets): `tests/fixtures/probe-2026-10-14.txt`.
+
+**Size – the API silently stops scanning long texts.** A fake AWS key placed
+at the end of the text:
+
+| Text | Key found | `characters` reported |
+|---|---|---|
+| ASCII 4k – 128k | yes | full length |
+| ASCII 256k | **no** (HTTP 200, `passed: true`) | full length (255,967) |
+| ASCII 512k, 1M | **no** | capped at **262,144** (2¹⁸) |
+| Hebrew 4k – 64k | yes | full length |
+| Hebrew 256k | **no** | full length |
+
+No error is ever returned for size. Consequences: chunks far below 128k
+(§4.2); "cut short" detected by comparing `characters` with what we sent.
+
+**Detection with random fake values:** AWS key → `Secrets` ("AWS credentials",
+"Access Tokens"). GitHub token, JWT and PEM private key → **not** detected
+(GitHub tokens carry a checksum, so random ones are likely rejected as fake;
+JWT/PEM may also be validated). Vendor detection quality is out of scope (§15);
+realistic but inactive keys can be tried in step 8.
+
+**Other detectors confirm D15:** PII-only text → `action: "block"`,
+`violations: ["Sensitive Data"]`, no `Secrets`. URL-only text → finding group
+"URLs Detector", `action: "log"`.
+
+**Errors:**
+
+| Case | Response |
+|---|---|
+| Invalid or missing APP-ID | **401** `{"message":"Unauthorized"}` → `API_UNAUTHORIZED` |
+| Malformed JSON body | **400** `{"error": "Body is not valid JSON…", "statusCode": 400}` |
+| Wrong field name | **200** `{"status":"failed","reason":"Validation error: …","result":null}` → `API_BAD_RESPONSE` |
+| Empty prompt | **200** `status: "success"` with `result.prompt: null` → never sent (§4.2) |
+
+**Latency and rate limiting:** English ≈ 100–350 ms per request regardless of
+size; Hebrew ≈ 750–1,100 ms. 20 concurrent requests: all 200, median 253 ms –
+no rate limiting observed (`maxConcurrency` stays 4).
 
 ---
 
@@ -511,9 +550,9 @@ which other secret types appear under `Secrets` (GitHub tokens, private keys…)
 | `allowedSites` | `[]` (empty) | Site patterns the scanner runs on (§3.1); each needs the user's permission grant |
 | `apiUrl` | `https://eu.prompt.security/api/protect` | Region-specific; must be `https://` on a host in `host_permissions` |
 | `appId` | *(empty)* | Required. Never hard-coded, never committed. |
-| `chunkSize` | 4000 chars (provisional) | Allowed 500–64,000; final default after probing (§4.2) |
+| `chunkSize` | 32,000 chars | Allowed 500–50,000 (§4.2, §5) |
 | `chunkOverlap` | 200 chars | Context between chunks (secrets are never split) |
-| `maxRequestBytes` | 64 KB (provisional) | UTF-8 size of a request body; final default after probing |
+| `maxRequestBytes` | 64 KB | UTF-8 size of a request body (§4.2, §5) |
 | `maxTextChars` | 2,000,000 | Beyond this: partial scan + warning |
 | `maxConcurrency` | 4 | Global – API calls in flight across all scans |
 | `maxParallelExtractions` | 2 | PDFs parsed at the same time |
@@ -546,6 +585,7 @@ supports it).
 | Secrets found | "Secrets found in file.pdf" (or "2 of 3 files contain secrets") | "You added it to example.com. AWS credentials (p. 3) AKIA…B1, GitHub token (p. 5) ghp_…9x. Remove the file and rotate the credentials." – max 3 findings listed, then "+N more" |
 | Scan failed / partial | "Couldn't fully scan file.pdf" | Reason per `ErrorCode`, e.g. "The scanning service could not be reached – the file was not checked." / "Only the first 2,000,000 characters were checked." |
 | Not configured | "PDF Secret Scanner isn't set up" | "Click to add your APP-ID." – click opens the options page |
+| APP-ID rejected (`API_UNAUTHORIZED`) | "Couldn't scan file.pdf" | "Your APP-ID was rejected – check the extension settings." – click opens the options page |
 | Clean | – | No notification |
 
 Notes:
@@ -732,7 +772,7 @@ before it is tagged and pushed.
 | # | Step | Content | Done when (incl. developer's manual check) |
 |---|---|---|---|
 | 0 | **Repository & tooling** | git, `.gitignore`/`.gitattributes`, npm, TypeScript, esbuild, Vitest (Node + browser mode, coverage), dev/release manifests, Dependabot + audit, GitHub Actions CI, README skeleton | CI green on GitHub; both builds load unpacked in Chrome without errors |
-| 1 | **API probing** | Probe script; developer runs it; results recorded in §5; mock API mirroring the real behaviour (incl. the exact "too large" response) | §5 holds real data; provisional chunk defaults set; mock API usable |
+| 1 | **API probing** | Probe script; developer runs it; results recorded in §5; mock API mirroring the real behaviour (incl. the exact "too large" response) | §5 holds real data; chunk defaults set; mock API usable |
 | 2 | **Walking skeleton** | Settings model (defaults + validation), safe logger, message types, offscreen document always present (single-flight), settings handshake, content-script registration (`reconcile()`, dev localhost seed), minimal content script sending any selected file **directly** to the offscreen document, which triggers a basic notification via the service worker | Selecting a file on the test page shows a notification; both architecture assumptions (§2: direct port, JSON serialisation) verified and recorded |
 | 3 | **Options & allow list** | Options page (APP-ID, API URL incl. dev localhost exception, settings), allow-list editing with per-site permissions, `reconcile()` triggers on list/permission changes, warning when notifications are blocked | Real APP-ID configured and a site added through the UI; revoking in `chrome://extensions` stops scanning there |
 | 4 | **Hand-off detection** | Five API hooks, MAIN ↔ content channel, WeakSet de-dup, PDF magic-byte filter, oversized files (name + size only), batching | Every source on the test page detected exactly once; non-PDFs ignored |
@@ -777,7 +817,7 @@ passes all tests.
 
 **Step 1 – API probing**
 1. `chore: add API probing script (APP-ID from env, no secrets in output)`
-2. `docs: record API probing results and set provisional chunk defaults` (after the developer runs the script)
+2. `docs: record API probing results and set chunk defaults` (after the developer runs the script)
 3. `chore: add local mock API mirroring the observed behaviour`
 → tag `step-1`
 
@@ -895,6 +935,10 @@ passes all tests.
 - Alerts only – no blocking (requirement).
 - Only allow-listed sites are protected; cross-origin upload iframes need their
   own entry; already-open tabs need a reload after a site is added.
+- The API silently stops scanning texts somewhere between 128k and 256k
+  characters; mitigated by 32k chunks and the "cut short" check (§4.2, §5).
+- With random fake values only AWS keys were detected; detection of other
+  secret types depends on the vendor (§5).
 - Only `Secrets` findings are used; other detectors (e.g. Sensitive Data) are
   ignored.
 - Incognito windows not supported.
@@ -935,7 +979,7 @@ Decisions challenged before implementation (2026-10-14).
 | D9 | Scan on **hand-off**, alert wording "added to this site" | Scan only on actual network upload | Once the page holds the file it can upload it any time; network upload can't be observed reliably. Cost: a PDF selected then cancelled is still scanned. |
 | D10 | **Threat model**: accidental leaks only | Also defend against evasive sites | A malicious site can always evade client-side hooks; the target is user mistakes. |
 | D11 | Chunks end only at whitespace (paragraph > line > space); PEM blocks unbreakable; overlap 200 for context | Fixed-size cuts with large overlap to cover long secrets | Secrets are never split, so overlap stays small (fewer extra calls); PEM keys (~1.7–3.2k chars) stay whole. |
-| D12 | **Bounded** automatic shrinking on "too large"; default size set by probing | Fixed size only; adaptive grow-and-shrink | Robust to the unknown limit. Shrink-only, floor 500, bounded depth, never grows past configured size – no runaway behaviour. |
+| D12 | **Bounded** automatic shrinking when a chunk is cut short (reported `characters` < sent, or 413); default size set by probing (updated after step 1) | Fixed size only; adaptive grow-and-shrink | Robust to the unknown limit. Shrink-only, floor 500, bounded depth, never grows past configured size – no runaway behaviour. |
 | D13 | Text above `maxTextChars` (2M): **scan the first part and warn** | Refuse to scan | A partial scan still catches most leaks; the warning makes the gap explicit and the result is never reported as clean. |
 | D14 | Text clean-up before chunking: **future feature** | Add in step 2 | Keep v1 scope tight; documented in §12 and README future options. |
 | D15 | Verdict = `result.prompt.findings.Secrets` non-empty | `action` / `passed` / `violations` | `action` reflects the server-side policy across all detectors: Sensitive Data or Token Limitation set to block would cause false alarms, Secrets set to log would silently miss secrets. Findings are also needed for the alert content. |
@@ -957,6 +1001,7 @@ Decisions challenged before implementation (2026-10-14).
 | D31 | Dev builds accept `http://localhost` API URL (mock API); release builds don't | Mock via fetch interception only | Allows manual end-to-end runs without the real API; release rule unchanged and tested. |
 | D32 | **Step order:** repo → API probing → walking skeleton → options & allow list → detection → extraction & jobs → scanning → notifications → real-site testing → hardening (v1.0.0) → offscreen lifecycle (v1.1.0); each step gated by the developer's manual check | Original 0–7 order (detection first, probing at end of step 3) | Unknowns (API behaviour, messaging architecture) settled first; no step uses code built later; smaller steps; something runnable from step 2. |
 | D33 | **Agent guide graph:** `AGENTS.md` master + `docs/agents/*.md` per component; `CLAUDE.md` imports `AGENTS.md`; facts and rules only, kept in sync per commit | Single large file; no agent docs | Agents read only the part they need; no redundancy with DESIGN.md; `AGENTS.md` is the name most coding agents look for. |
+| D34 | From probing: `chunkSize` 32,000 (max 50,000), `maxRequestBytes` 64 KB, "cut short" = reported `characters` < sent, new `API_UNAUTHORIZED`, never send empty chunks | Keep 4,000 / 64,000; rely on 413 | The API returns 200 "clean" while silently not scanning text beyond ~128–256k characters; 32k gives a 4× margin with few calls. |
 
 ---
 
@@ -970,6 +1015,8 @@ the README:
 - [ ] **Privacy notice:** the full text of every PDF handed to a site is sent to
       Prompt Security (EU endpoint); this includes files selected and then
       cancelled
+- [ ] **API behaviour:** silently stops scanning very long texts (why chunks are
+      32k), and secret types detected depend on the vendor (§5)
 - [ ] **Vendor data handling:** retention/logging on the vendor side is unknown;
       responses indicate requests are logged
 - [ ] **Incognito windows are not supported** in this version

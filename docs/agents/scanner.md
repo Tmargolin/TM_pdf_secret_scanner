@@ -18,8 +18,15 @@ Design: `DESIGN.md` §4, §4.2, §5
 ## Rules
 - Chunk ends only at whitespace (blank line > line break > space); never inside
   a token or a PEM block.
-- Bounded splitting: shrink only, floor `MIN_CHUNK_CHARS` (500), never above
-  `chunkSize`; failure → `CHUNK_TOO_LARGE`.
+- Bounded splitting when a chunk is cut short (response
+  `Token Limitation[0].characters` < characters sent, or HTTP 413): shrink
+  only, floor `MIN_CHUNK_CHARS` (500), never above `chunkSize`; failure →
+  `CHUNK_TOO_LARGE`.
+- `chunkSize` ≤ `MAX_CHUNK_CHARS` (50,000): the API silently stops scanning
+  long texts (`DESIGN.md` §5).
+- Never send empty or whitespace-only chunks.
+- HTTP 401 → `API_UNAUTHORIZED`; `status !== "success"` or
+  `result.prompt === null` → `API_BAD_RESPONSE`.
 - Ignore `action` / `passed` / `violations`.
 - Never log text, bodies or entities.
 
