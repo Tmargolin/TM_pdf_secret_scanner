@@ -561,7 +561,7 @@ no rate limiting observed (`maxConcurrency` stays 4).
 | `jobTimeoutMs` | 120000 | Per file, end to end |
 | `requestTimeoutMs` | 15000 | |
 | `retries` | 2 | Exponential backoff |
-| `maxFileSizeMB` | 25 | |
+| `maxFileSizeMB` | 25 | Allowed 1–45: files travel base64-encoded in one message (64 MB limit) |
 | `offscreenIdleTimeoutSec` | 60 | Added in step 10 only |
 
 All defaults are documented in the README (see §14 for everything the README
