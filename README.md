@@ -56,6 +56,23 @@ Manual tests (real API, real websites, OS notifications) follow
 **Planned:** automated end-to-end tests with Playwright – Chromium launched
 with the extension loaded, local test pages and a mock API.
 
+### Known gaps in test coverage
+
+**Service worker – settings reply when storage fails**
+(`src/background/service-worker.ts`, `OFFSCREEN_READY` handler)
+
+- *Scenario not covered:* the offscreen document sends `OFFSCREEN_READY`,
+  and reading the settings from `chrome.storage.local` fails. The service
+  worker then answers with no settings (`sendResponse(undefined)`), and the
+  offscreen document retries after 0.5 s, 2 s and 5 s. The retries are
+  tested (`settings-client`); the service worker's failure reply is not.
+  Coverage shows this as one uncovered function in `service-worker.ts`.
+- *Needed for a future fix:* let the chrome fake
+  (`tests/helpers/chrome-fake.ts`) make `storage.local.get` reject on demand
+  (for example a `failNextGet` option); then, in `service-worker.test.ts`,
+  send `OFFSCREEN_READY` from the offscreen document's sender and check that
+  `sendResponse` is called with `undefined`.
+
 ## Privacy and security (summary)
 
 - The full text of PDFs added to allow-listed sites is sent to the Prompt
