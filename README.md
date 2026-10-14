@@ -65,6 +65,71 @@ does not show this. Adding it again answers "already on the list". To restore
 scanning, **Remove** the site in the options page and **add** it again. To be
 addressed by the planned per-site access status (see Future options).
 
+## How uploads are detected – hooks in the page's MAIN world
+
+> **The detection code runs inside the web page's own JavaScript world
+> (Chrome's `MAIN` world), not in the extension's usual isolated world.
+> This is deliberate, and it is the only place where it can work.**
+
+**What it does.** However a file reaches a website – file picker, hidden or
+detached input, input inside a shadow DOM, drag & drop, paste, folder drop,
+File System Access API – the site's own code must obtain the `File` object
+through a handful of browser APIs (`HTMLInputElement.files`,
+`DataTransfer.files`, `DataTransferItem.getAsFile`, `FileSystemFileEntry.file`,
+`FileSystemFileHandle.getFile`). The extension wraps these APIs **once, on
+their prototypes**, before any page script runs (`document_start`). The
+wrapper calls the original, notes the file, and returns **exactly** the
+original result. We catch the **hand-off of the file to the page**, not a
+particular event or element – so every way of adding a file is covered,
+including ways a site invents itself.
+
+**Why we wrap the hand-off instead of watching events.** Two reasons:
+
+1. **"Hidden" upload paths that event listeners cannot see.** Listening for
+   `change` / `drop` / `paste` events on the page misses common real-world
+   cases:
+   - **detached inputs** – `document.createElement('input').click()`: the
+     input is never in the page, so its events never reach a listener there;
+   - **inputs inside shadow DOM** – `change` does not cross a shadow-root
+     boundary, and a *closed* shadow root cannot be looked into at all;
+   - the **File System Access API** (`showOpenFilePicker()`, file handles
+     from drag & drop) – there is no input element and no `change` event;
+   - **folder drops** (`webkitGetAsEntry()` → entries → `file()`) and
+     `dataTransfer.items[i].getAsFile()` – the files are produced by an API
+     call, not delivered by an event.
+
+   Every one of these still has to call one of the wrapped APIs to get the
+   `File` – so the wrappers see them all.
+2. **Warning before the file is sent.** The wrapper sees the file at the
+   moment the site's code **receives it** – which is usually **before** the
+   site uploads it (when the form is submitted, the message is sent, the
+   "Upload" button is pressed). The alert can therefore arrive while the user
+   can still remove the file and **avoid the leak**, not only report it
+   afterwards. Sites that start uploading immediately may already have sent
+   it; the alert then still tells the user to rotate the credentials. (The
+   extension only alerts – it never blocks an upload.)
+
+**Why it must be the MAIN world.** A content script normally runs in an
+*isolated world*: it sees the same page, but has its **own copy** of every
+JavaScript built-in. Wrapping `HTMLInputElement.prototype` there would change
+only the extension's copy – the site's code would never pass through it, and
+nothing would be detected. Only code in the page's own world can wrap the
+prototypes the site actually uses.
+
+**What this implies.**
+- The MAIN world has **no `chrome.*` APIs**. The hooks therefore only
+  forward each `File` to the extension's isolated content script over a
+  private `MessageChannel`; everything else (reading the file, scanning,
+  alerts) happens outside the page.
+- The hooks **never** change what the page gets, never throw, never delay
+  the page, and never read file contents. Nothing about results is ever put
+  into the page.
+- Code in the page's world is visible to the page. A site that deliberately
+  undoes the wrappers can hide its own files from the extension – outside the
+  threat model, which is protecting users from **accidental** leaks
+  (DESIGN.md §8). The site can never read the APP-ID, scan results or
+  notifications.
+
 ## Testing
 
 | Command | What it runs |

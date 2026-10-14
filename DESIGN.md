@@ -1069,6 +1069,9 @@ the README:
       per-site permission prompt, reload already-open tabs, iframe origins must
       be added separately
 - [ ] Threat model: protects against accidental leaks, not evasive sites
+- [ ] **Detection runs in the page's MAIN world** – what the hooks do, why the
+      isolated world cannot work, and what that implies (no `chrome.*`, channel,
+      visible to the page)
 - [ ] Known gaps in test coverage: the scenario not covered and what a future
       test needs
 - [ ] OS notification settings (Windows notifications / Focus Assist)
