@@ -183,3 +183,49 @@ describe('settings handshake', () => {
     expect(fake.sentMessages).toEqual([]);
   });
 });
+
+describe('SHOW_RESULT → notification', () => {
+  const BATCH_ID = '6a2b3c4d-5555-4666-8777-988899990000';
+  const SHOW = {
+    type: 'SHOW_RESULT',
+    batchId: BATCH_ID,
+    origin: 'http://localhost:8787',
+    results: [
+      {
+        scanId: '5f1c2a3e-1111-4222-8333-944455556666',
+        batchId: BATCH_ID,
+        fileName: 'a.pdf',
+        status: 'clean',
+        findings: [],
+        errors: [],
+      },
+    ],
+  };
+
+  it('shows one notification for a result from the offscreen document, without replying', async () => {
+    await startServiceWorker();
+    const { returned, sendResponse } = await send(SHOW, OFFSCREEN);
+    expect(returned).toBe(false);
+    expect(sendResponse).not.toHaveBeenCalled();
+    expect(fake.notifications.get(`batch-${BATCH_ID}`)?.message).toBe(
+      'Received 1 file(s) from localhost:8787. Scanning is not implemented yet – nothing was checked.',
+    );
+  });
+
+  it.each([
+    ['a content script', { ...CONTENT_SCRIPT, url: 'https://mail.google.com/' }],
+    ['another page of the extension', { id: FAKE_EXTENSION_ID, url: `chrome-extension://${FAKE_EXTENSION_ID}/options/options.html` }],
+    ['another extension', { id: 'otherextensionidotherextensionid', url: OFFSCREEN_URL }],
+  ])('ignores a result sent by %s', async (_name, sender) => {
+    await startServiceWorker();
+    await send(SHOW, sender);
+    expect(fake.notifications.size).toBe(0);
+  });
+
+  it('ignores a malformed result', async () => {
+    await startServiceWorker();
+    await send({ ...SHOW, results: [] }, OFFSCREEN);
+    await send({ ...SHOW, origin: 42 }, OFFSCREEN);
+    expect(fake.notifications.size).toBe(0);
+  });
+});

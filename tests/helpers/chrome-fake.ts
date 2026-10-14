@@ -1,6 +1,8 @@
 // In-memory stand-in for the chrome.* APIs the extension uses (DESIGN.md §15).
 // Grows with each step: only what current code calls is implemented.
 
+import catalogue from '../../_locales/en/messages.json' with { type: 'json' };
+
 type Listener = (...args: never[]) => unknown;
 
 /** A chrome.events.Event look-alike whose listeners tests can trigger. */
@@ -73,6 +75,8 @@ export interface ChromeFake {
   readonly registeredScripts: chrome.scripting.RegisteredContentScript[];
   /** Every chrome.scripting call that changes the registration, in order. */
   readonly scriptingCalls: { method: 'register' | 'update' | 'unregister'; ids: string[] }[];
+  /** Notifications currently shown, by id (create with an existing id replaces). */
+  readonly notifications: Map<string, chrome.notifications.NotificationCreateOptions>;
   /** Puts the fake on globalThis.chrome. */
   install(): void;
   /** Removes globalThis.chrome. */
@@ -93,6 +97,7 @@ export function createChromeFake(): ChromeFake {
   const grantedOrigins: string[] = [];
   const registeredScripts: chrome.scripting.RegisteredContentScript[] = [];
   const scriptingCalls: ChromeFake['scriptingCalls'] = [];
+  const notifications = new Map<string, chrome.notifications.NotificationCreateOptions>();
 
   const getURL = (path: string) => `chrome-extension://${FAKE_EXTENSION_ID}/${path.replace(/^\//, '')}`;
 
@@ -113,6 +118,7 @@ export function createChromeFake(): ChromeFake {
     grantedOrigins,
     registeredScripts,
     scriptingCalls,
+    notifications,
     install: () => void Reflect.set(globalThis, 'chrome', fake.chrome),
     uninstall: () => void Reflect.deleteProperty(globalThis, 'chrome'),
   };
@@ -213,7 +219,39 @@ export function createChromeFake(): ChromeFake {
     },
   };
 
-  (fake as { chrome: unknown }).chrome = { runtime, offscreen, storage, permissions, scripting };
+  // Like Chrome: a relative or foreign iconUrl cannot be loaded, and a basic
+  // notification needs an icon, a title and a message.
+  const notificationsApi = {
+    async create(id: string, options: chrome.notifications.NotificationCreateOptions) {
+      if (!options.iconUrl?.startsWith(getURL(''))) throw new Error('Unable to download all specified images.');
+      if (!options.title || !options.message) throw new Error('Some of the required properties are missing: type, iconUrl, title and message.');
+      notifications.set(id, structuredClone(options));
+      return id;
+    },
+  };
+
+  // chrome.i18n.getMessage over the real catalogue: "" for unknown keys, $1… substitutions.
+  type CatalogueEntry = { message: string; placeholders?: Record<string, { content: string }> };
+  const i18n = {
+    getMessage(key: string, substitutions: string[] = []) {
+      const entry = (catalogue as Record<string, CatalogueEntry>)[key];
+      if (!entry) return '';
+      return entry.message.replace(/\$([A-Za-z0-9_]+)\$/g, (whole, name: string) => {
+        const content = entry.placeholders?.[name.toLowerCase()]?.content ?? whole;
+        return content.replace(/\$(\d)/g, (_m, n: string) => substitutions[Number(n) - 1] ?? '');
+      });
+    },
+  };
+
+  (fake as { chrome: unknown }).chrome = {
+    runtime,
+    offscreen,
+    storage,
+    permissions,
+    scripting,
+    notifications: notificationsApi,
+    i18n,
+  };
   return fake;
 }
 

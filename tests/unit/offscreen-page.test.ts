@@ -115,6 +115,43 @@ describe('scan port (content script → offscreen document, direct)', () => {
     expect(console.info).toHaveBeenCalledWith('[PSS:offscreen] batch received', { files: 1 });
   });
 
+  it('sends one SHOW_RESULT to the service worker before BATCH_DONE', async () => {
+    const order: string[] = [];
+    fake.sendMessageHandler = async (message) => {
+      if ((message as { type?: string }).type === 'SHOW_RESULT') order.push('SHOW_RESULT');
+      return answerWith({})(message);
+    };
+    await loadOffscreenPage();
+    await contentScript().send(batch);
+    order.push('done');
+    expect(order).toEqual(['SHOW_RESULT', 'done']);
+    expect(fake.sentMessages).toContainEqual({
+      type: 'SHOW_RESULT',
+      batchId: BATCH_ID,
+      origin: 'http://localhost:8787',
+      results: [
+        {
+          scanId: '5f1c2a3e-1111-4222-8333-944455556666',
+          batchId: BATCH_ID,
+          fileName: 'a.pdf',
+          status: 'clean',
+          findings: [],
+          errors: [],
+        },
+      ],
+    });
+  });
+
+  it('still finishes the batch when the service worker cannot be reached', async () => {
+    fake.sendMessageHandler = async (message) => {
+      if ((message as { type?: string }).type === 'SHOW_RESULT') throw new Error('Could not establish connection.');
+      return answerWith({})(message);
+    };
+    await loadOffscreenPage();
+    expect(await contentScript().send(batch)).toBe('done');
+    expect(console.warn).toHaveBeenCalledWith('[PSS:offscreen] result not delivered to the service worker');
+  });
+
   it('a batch that arrives before the settings waits for them', async () => {
     await loadOffscreenPage(); // the service worker does not answer OFFSCREEN_READY
     let outcome: string | undefined;
