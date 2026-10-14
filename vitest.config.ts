@@ -6,6 +6,8 @@ import { defineConfig } from 'vitest/config';
 // - browser: page-level code in Chromium    → tests/browser/**
 // Projects inherit the root options (Vitest 5 default).
 export default defineConfig({
+  // Same build-time flag as build.ts; tests run as a dev build.
+  define: { __DEV__: 'true' },
   test: {
     passWithNoTests: true,
     coverage: {
