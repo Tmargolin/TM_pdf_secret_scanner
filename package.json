@@ -12,7 +12,8 @@
     "build:dev": "node build.ts --dev",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "audit": "npm audit --audit-level=high"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.5",
