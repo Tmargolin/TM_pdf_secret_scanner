@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getDefaultSettings } from '../../src/shared/settings.ts';
 import { createChromeFake, FAKE_EXTENSION_ID, flushAsync, type ChromeFake } from '../helpers/chrome-fake.ts';
 
 const CONTENT_SCRIPT = { id: FAKE_EXTENSION_ID, tab: { id: 7 } };
+const OFFSCREEN_URL = `chrome-extension://${FAKE_EXTENSION_ID}/offscreen/offscreen.html`;
+const OFFSCREEN = { id: FAKE_EXTENSION_ID, url: OFFSCREEN_URL };
 
 let fake: ChromeFake;
 
@@ -24,7 +27,9 @@ beforeEach(() => {
   fake = createChromeFake();
   fake.install();
   // The safe logger writes to the console; keep test output quiet.
+  vi.spyOn(console, 'debug').mockImplementation(() => {});
   vi.spyOn(console, 'info').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -112,10 +117,43 @@ describe('ENSURE_OFFSCREEN', () => {
   });
 });
 
-describe('offscreen document page', () => {
-  it('logs that it loaded', async () => {
-    vi.resetModules();
-    await import('../../src/offscreen/offscreen.ts');
-    expect(console.info).toHaveBeenCalledWith('[PSS:offscreen] offscreen document loaded');
+describe('settings handshake', () => {
+  it('answers OFFSCREEN_READY from the offscreen document with the current settings', async () => {
+    fake.storageData['settings'] = { appId: 'abc' };
+    await startServiceWorker();
+    const { returned, sendResponse } = await send({ type: 'OFFSCREEN_READY' }, OFFSCREEN);
+    expect(returned).toBe(true);
+    expect(sendResponse).toHaveBeenCalledWith({
+      type: 'SETTINGS_UPDATED',
+      settings: { ...getDefaultSettings(true), appId: 'abc' },
+    });
+  });
+
+  it.each([
+    ['a content script', { ...CONTENT_SCRIPT, url: 'https://mail.google.com/' }],
+    ['another page of the extension', { id: FAKE_EXTENSION_ID, url: `chrome-extension://${FAKE_EXTENSION_ID}/options/options.html` }],
+    ['another extension', { id: 'otherextensionidotherextensionid', url: OFFSCREEN_URL }],
+  ])('ignores OFFSCREEN_READY from %s', async (_name, sender) => {
+    await startServiceWorker();
+    const { returned, sendResponse } = await send({ type: 'OFFSCREEN_READY' }, sender);
+    expect(returned).toBe(false);
+    expect(sendResponse).not.toHaveBeenCalled();
+  });
+
+  it('pushes the settings when they change in storage', async () => {
+    await startServiceWorker();
+    fake.sendMessageHandler = async () => undefined;
+    await fake.chrome.storage.local.set({ settings: { appId: 'new-id' } });
+    await flushAsync();
+    expect(fake.sentMessages).toEqual([
+      { type: 'SETTINGS_UPDATED', settings: { ...getDefaultSettings(true), appId: 'new-id' } },
+    ]);
+  });
+
+  it('does not push when other storage keys change', async () => {
+    await startServiceWorker();
+    await fake.chrome.storage.local.set({ somethingElse: 1 });
+    await flushAsync();
+    expect(fake.sentMessages).toEqual([]);
   });
 });

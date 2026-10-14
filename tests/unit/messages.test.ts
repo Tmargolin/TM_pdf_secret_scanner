@@ -4,6 +4,7 @@ import {
   FULLY_MASKED,
   HANDOFF_MARKER,
   isFromContentScript,
+  isFromExtensionContext,
   isFromOffscreen,
   isHandoffPortMessage,
   isMaskedValue,
@@ -326,6 +327,14 @@ describe('sender checks', () => {
     expect(isFromContentScript({ id: 'other', tab: { id: 1 } }, EXT)).toBe(false);
     expect(isFromContentScript({ id: EXT }, EXT)).toBe(false);
     expect(isFromContentScript({}, EXT)).toBe(false);
+  });
+
+  it('isFromExtensionContext needs our extension id and no tab', () => {
+    expect(isFromExtensionContext({ id: EXT }, EXT)).toBe(true);
+    expect(isFromExtensionContext({ id: EXT, url: `chrome-extension://${EXT}/background/service-worker.js` }, EXT)).toBe(true);
+    expect(isFromExtensionContext({ id: EXT, tab: { id: 1 } }, EXT)).toBe(false);
+    expect(isFromExtensionContext({ id: 'other' }, EXT)).toBe(false);
+    expect(isFromExtensionContext({}, EXT)).toBe(false);
   });
 
   it('isFromOffscreen needs our extension id, no tab and the exact URL', () => {
