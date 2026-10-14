@@ -4,6 +4,7 @@
 // logged or stored; it lives only as long as the job that needs it.
 
 import type { getDocument, PDFWorker } from 'pdfjs-dist/legacy/build/pdf.mjs';
+import type { ErrorCode } from '../shared/types.ts';
 
 /** The part of the pdf.js module we use. */
 export interface PdfJs {
@@ -53,7 +54,7 @@ export function joinTextItems(items: readonly object[]): string {
  * Extracts the text of every page. The document is always destroyed at the
  * end – also on errors – so its memory is released at once.
  * Note: pdf.js takes ownership of `bytes` (they move to the worker).
- * Errors (encrypted, invalid…) are passed on; they are classified in 5.2.
+ * pdf.js errors are passed on; extractPages() classifies them.
  */
 export async function extractText(
   pdfjs: PdfJs,
@@ -74,4 +75,43 @@ export async function extractText(
   } finally {
     await task.destroy();
   }
+}
+
+/** Why a PDF could not be read. */
+export type ExtractionErrorCode = Extract<ErrorCode, 'PDF_ENCRYPTED' | 'PDF_INVALID' | 'NO_TEXT_LAYER'>;
+
+export type ExtractionOutcome = { ok: true; pages: string[] } | { ok: false; code: ExtractionErrorCode };
+
+/**
+ * pdf.js error → our code (behaviour checked against pdf.js 6.4.299):
+ *   PasswordException ("No password given") → PDF_ENCRYPTED – a password is
+ *     needed to open the file. (Files encrypted with an owner password only
+ *     open normally and are scanned.)
+ *   anything else (InvalidPDFException for damaged, truncated, empty files…)
+ *     → PDF_INVALID: the file could not be read, so it was not checked.
+ * pdf.js error messages are not passed on – only the code.
+ */
+export function classifyPdfError(error: unknown): Exclude<ExtractionErrorCode, 'NO_TEXT_LAYER'> {
+  const name = typeof error === 'object' && error !== null ? (error as { name?: unknown }).name : undefined;
+  return name === 'PasswordException' ? 'PDF_ENCRYPTED' : 'PDF_INVALID';
+}
+
+/** True if any page has text other than whitespace. Scanned PDFs (images only) have none – OCR is out of scope. */
+export function hasTextLayer(pages: readonly string[]): boolean {
+  return pages.some((page) => page.trim() !== '');
+}
+
+/** extractText, with every failure turned into one of our codes. Never throws. */
+export async function extractPages(
+  pdfjs: PdfJs,
+  bytes: Uint8Array,
+  options: { worker?: PDFWorker } = {},
+): Promise<ExtractionOutcome> {
+  let pages: string[];
+  try {
+    ({ pages } = await extractText(pdfjs, bytes, options));
+  } catch (error) {
+    return { ok: false, code: classifyPdfError(error) };
+  }
+  return hasTextLayer(pages) ? { ok: true, pages } : { ok: false, code: 'NO_TEXT_LAYER' };
 }
