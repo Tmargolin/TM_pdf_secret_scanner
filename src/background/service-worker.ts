@@ -6,6 +6,7 @@
 import { isFromContentScript, isFromOffscreen, parseRuntimeMessage } from '../shared/messages.ts';
 import { createLogger } from '../shared/safe-logger.ts';
 import { chromeOffscreenApi, createOffscreenManager, OFFSCREEN_PATH } from './offscreen-manager.ts';
+import { chromeScriptingApi, createScriptRegistry } from './script-registry.ts';
 import { createSettingsBridge } from './settings-bridge.ts';
 
 const log = createLogger('sw', { dev: __DEV__ });
@@ -13,6 +14,12 @@ const offscreen = createOffscreenManager(chromeOffscreenApi(), log);
 const settings = createSettingsBridge({
   storage: chrome.storage.local,
   send: (message) => chrome.runtime.sendMessage(message),
+  dev: __DEV__,
+  log,
+});
+const scripts = createScriptRegistry({
+  api: chromeScriptingApi(),
+  storage: chrome.storage.local,
   dev: __DEV__,
   log,
 });
@@ -25,7 +32,12 @@ const keepOffscreenAlive = (): void => {
 // Every time the service worker starts (install, update, browser start, extension
 // re-enabled, or woken after being stopped) – a cheap existence check.
 keepOffscreenAlive();
-chrome.runtime.onInstalled.addListener(keepOffscreenAlive);
+chrome.runtime.onInstalled.addListener(() => {
+  keepOffscreenAlive();
+  // Install, update or reload: register the content scripts for the allow list.
+  // (Startup, allow-list and permission changes are added in step 3.)
+  void scripts.reconcile();
+});
 chrome.runtime.onStartup.addListener(keepOffscreenAlive);
 
 chrome.storage.onChanged.addListener((changes, areaName) => {

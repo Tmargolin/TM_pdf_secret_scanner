@@ -10,7 +10,7 @@ Design: `DESIGN.md` §2, §3.1, §7
 |---|---|---|
 | `offscreen-manager.ts` | `ensureOffscreen()` single-flight (`runtime.getContexts`); "only a single offscreen document" error = success | service-worker start, `onInstalled`, `onStartup`, `ENSURE_OFFSCREEN` (content scripts only; reply `{ ok }`) |
 | `settings-bridge.ts` | Reply to `OFFSCREEN_READY` (offscreen sender only) with `SETTINGS_UPDATED`; push `SETTINGS_UPDATED` when `settings` changes in `storage.local` (no document → skipped); registers the APP-ID with the safe logger | `OFFSCREEN_READY`, `storage.onChanged` |
-| `script-registry.ts` | `reconcile()`: register hooks + content script for sites in `allowedSites` **and** granted | `onInstalled`, `onStartup`, `storage.onChanged`, `permissions.onAdded/onRemoved` |
+| `script-registry.ts` | `reconcile()`: register hooks + content script (id `pss-content`, `content/content.js`) for sites in `allowedSites` **and** granted (`permissions.contains`); none → unregister; runs chained, never rejects | `onInstalled` (step 2); `onStartup`, `storage.onChanged`, `permissions.onAdded/onRemoved` (step 3) |
 | `notifications.ts` | `chrome.notifications.create` from `SHOW_RESULT`, `SCAN_INTERRUPTED`, not-configured; click → options page | messages |
 
 ## Rules

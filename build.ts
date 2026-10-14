@@ -14,19 +14,31 @@ const template = JSON.parse(await readFile('manifest.json', 'utf8')) as Manifest
 await rm(outdir, { recursive: true, force: true });
 await mkdir(outdir, { recursive: true });
 
+const common = {
+  outdir,
+  bundle: true,
+  target: 'chrome120',
+  minify: false,
+  sourcemap: mode === 'dev' ? ('inline' as const) : false,
+  define: { __DEV__: JSON.stringify(mode === 'dev') },
+  logLevel: 'warning' as const,
+};
+
+// Extension pages and the service worker load their scripts as ES modules.
 await esbuild.build({
+  ...common,
   entryPoints: {
     'background/service-worker': 'src/background/service-worker.ts',
     'offscreen/offscreen': 'src/offscreen/offscreen.ts',
   },
-  outdir,
-  bundle: true,
   format: 'esm',
-  target: 'chrome120',
-  minify: false,
-  sourcemap: mode === 'dev' ? 'inline' : false,
-  define: { __DEV__: JSON.stringify(mode === 'dev') },
-  logLevel: 'warning',
+});
+
+// Content scripts are classic scripts (no import/export): wrap each in a function.
+await esbuild.build({
+  ...common,
+  entryPoints: { 'content/content': 'src/content/index.ts' },
+  format: 'iife',
 });
 
 await cp('_locales', `${outdir}/_locales`, { recursive: true });

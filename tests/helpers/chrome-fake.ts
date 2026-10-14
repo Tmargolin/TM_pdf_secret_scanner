@@ -66,6 +66,12 @@ export interface ChromeFake {
    * no other extension context is listening.
    */
   sendMessageHandler: ((message: unknown) => Promise<unknown>) | null;
+  /** Origins chrome.permissions.contains reports as granted (exact pattern match). */
+  readonly grantedOrigins: string[];
+  /** Content scripts currently registered through chrome.scripting. */
+  readonly registeredScripts: chrome.scripting.RegisteredContentScript[];
+  /** Every chrome.scripting call that changes the registration, in order. */
+  readonly scriptingCalls: { method: 'register' | 'update' | 'unregister'; ids: string[] }[];
   /** Puts the fake on globalThis.chrome. */
   install(): void;
   /** Removes globalThis.chrome. */
@@ -82,6 +88,9 @@ export function createChromeFake(): ChromeFake {
   const onStorageChanged = createFakeEvent<StorageChangeListener>();
   const storageData: Record<string, unknown> = {};
   const sentMessages: unknown[] = [];
+  const grantedOrigins: string[] = [];
+  const registeredScripts: chrome.scripting.RegisteredContentScript[] = [];
+  const scriptingCalls: ChromeFake['scriptingCalls'] = [];
 
   const getURL = (path: string) => `chrome-extension://${FAKE_EXTENSION_ID}/${path.replace(/^\//, '')}`;
 
@@ -98,6 +107,9 @@ export function createChromeFake(): ChromeFake {
     onStorageChanged,
     sentMessages,
     sendMessageHandler: null,
+    grantedOrigins,
+    registeredScripts,
+    scriptingCalls,
     install: () => void Reflect.set(globalThis, 'chrome', fake.chrome),
     uninstall: () => void Reflect.deleteProperty(globalThis, 'chrome'),
   };
@@ -155,7 +167,49 @@ export function createChromeFake(): ChromeFake {
     },
   };
 
-  (fake as { chrome: unknown }).chrome = { runtime, offscreen, storage };
+  const permissions = {
+    async contains({ origins = [] }: chrome.permissions.Permissions) {
+      return origins.every((origin) => grantedOrigins.includes(origin));
+    },
+  };
+
+  // Mirrors Chrome's checks and error messages for the calls we make.
+  const findScript = (id: string) => registeredScripts.findIndex((s) => s.id === id);
+  const scripting = {
+    async getRegisteredContentScripts(filter: chrome.scripting.ContentScriptFilter = {}) {
+      return registeredScripts.filter((s) => !filter.ids || filter.ids.includes(s.id)).map((s) => structuredClone(s));
+    },
+    async registerContentScripts(scripts: chrome.scripting.RegisteredContentScript[]) {
+      scriptingCalls.push({ method: 'register', ids: scripts.map((s) => s.id) });
+      for (const script of scripts) {
+        if (findScript(script.id) >= 0) throw new Error(`Duplicate script ID '${script.id}'`);
+        if (!script.matches?.length) throw new Error(`Script with ID '${script.id}' must specify 'matches'`);
+      }
+      registeredScripts.push(...scripts.map((s) => structuredClone(s)));
+    },
+    async updateContentScripts(scripts: chrome.scripting.RegisteredContentScript[]) {
+      scriptingCalls.push({ method: 'update', ids: scripts.map((s) => s.id) });
+      for (const script of scripts) {
+        if (findScript(script.id) < 0) {
+          throw new Error(`Script with ID '${script.id}' does not exist or is not fully registered`);
+        }
+        if (script.matches?.length === 0) throw new Error(`Script with ID '${script.id}' must specify 'matches'`);
+      }
+      for (const script of scripts) {
+        // Chrome changes only the fields given; we always pass whole scripts.
+        const current = registeredScripts[findScript(script.id)];
+        if (current) Object.assign(current, structuredClone(script));
+      }
+    },
+    async unregisterContentScripts(filter: chrome.scripting.ContentScriptFilter = {}) {
+      const ids = filter.ids ?? registeredScripts.map((s) => s.id);
+      scriptingCalls.push({ method: 'unregister', ids });
+      for (const id of ids) if (findScript(id) < 0) throw new Error(`Nonexistent script ID '${id}'`);
+      for (const id of ids) registeredScripts.splice(findScript(id), 1);
+    },
+  };
+
+  (fake as { chrome: unknown }).chrome = { runtime, offscreen, storage, permissions, scripting };
   return fake;
 }
 
