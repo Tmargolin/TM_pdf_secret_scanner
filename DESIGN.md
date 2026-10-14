@@ -703,9 +703,9 @@ TM_Chrome_ext/                     ← Git repository root (GitHub remote: origi
 ├─ src/
 │  ├─ main-world/   handoff-hooks.ts            (wrapped APIs, WeakSet, channel)
 │  ├─ content/      bridge.ts, batcher.ts, index.ts
-│  ├─ background/   service-worker.ts, offscreen-manager.ts, script-registry.ts,
+│  ├─ background/   service-worker.ts, offscreen-manager.ts, settings-bridge.ts, script-registry.ts,
 │  │                notifications.ts
-│  ├─ offscreen/    offscreen.html, offscreen.ts
+│  ├─ offscreen/    offscreen.html, offscreen.ts, settings-client.ts
 │  ├─ scanner/      extract.ts, chunker.ts, api-client.ts, parse.ts, aggregate.ts, mask.ts
 │  ├─ options/      options.html, options.ts
 │  └─ shared/       settings.ts, messages.ts, types.ts, safe-logger.ts

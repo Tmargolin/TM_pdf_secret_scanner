@@ -237,6 +237,15 @@ export function isFromContentScript(sender: SenderInfo, extensionId: string): bo
   return sender.id === extensionId && sender.tab !== undefined;
 }
 
+/**
+ * Sent by one of our own extension contexts that is not in a tab (service
+ * worker or offscreen document). Web pages cannot message us at all (no
+ * externally_connectable), and content scripts always have a tab.
+ */
+export function isFromExtensionContext(sender: SenderInfo, extensionId: string): boolean {
+  return sender.id === extensionId && sender.tab === undefined;
+}
+
 /** Sent by our offscreen document (no tab, exact page URL). */
 export function isFromOffscreen(sender: SenderInfo, extensionId: string, offscreenUrl: string): boolean {
   return sender.id === extensionId && sender.tab === undefined && sender.url === offscreenUrl;

@@ -1,15 +1,17 @@
 # Offscreen document
 
 Purpose: owns every scan – jobs, limits, extraction, scanning, results.
-Files: `src/offscreen/offscreen.html`, `offscreen.ts` (ports, job registry,
-limits, settings cache); uses `src/scanner/*`
+Files: `src/offscreen/offscreen.html`, `offscreen.ts` (wiring, ports, job
+registry, limits), `settings-client.ts` (settings cache); uses `src/scanner/*`
 Design: `DESIGN.md` §2, §4, §4.1
 
 ## Inputs
 - Ports named `scan-batch` from content scripts only (`sender.tab` set) →
   `SCAN_REQUEST`.
-- Settings: `OFFSCREEN_READY` reply, then `SETTINGS_UPDATED` pushes from the
-  service worker. Jobs wait until settings arrive.
+- Settings (`settings-client.ts`): sends `OFFSCREEN_READY` on load, retries
+  after 0.5 / 2 / 5 s; accepts `SETTINGS_UPDATED` only from our own non-tab
+  contexts (`isFromExtensionContext`). Jobs wait on `ready()`; APP-ID is
+  registered with the safe logger.
 
 ## Outputs
 - `SHOW_RESULT` (one per batch, masked findings only) → service worker.

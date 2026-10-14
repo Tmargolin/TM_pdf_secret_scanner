@@ -3,12 +3,19 @@
 // time, so it holds no state that matters; listeners are registered at the
 // top level so Chrome can wake it for these events.
 
-import { isFromContentScript, parseRuntimeMessage } from '../shared/messages.ts';
+import { isFromContentScript, isFromOffscreen, parseRuntimeMessage } from '../shared/messages.ts';
 import { createLogger } from '../shared/safe-logger.ts';
-import { chromeOffscreenApi, createOffscreenManager } from './offscreen-manager.ts';
+import { chromeOffscreenApi, createOffscreenManager, OFFSCREEN_PATH } from './offscreen-manager.ts';
+import { createSettingsBridge } from './settings-bridge.ts';
 
 const log = createLogger('sw', { dev: __DEV__ });
 const offscreen = createOffscreenManager(chromeOffscreenApi(), log);
+const settings = createSettingsBridge({
+  storage: chrome.storage.local,
+  send: (message) => chrome.runtime.sendMessage(message),
+  dev: __DEV__,
+  log,
+});
 
 /** Create the offscreen document; failures are already logged by the manager. */
 const keepOffscreenAlive = (): void => {
@@ -21,14 +28,26 @@ keepOffscreenAlive();
 chrome.runtime.onInstalled.addListener(keepOffscreenAlive);
 chrome.runtime.onStartup.addListener(keepOffscreenAlive);
 
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  void settings.onStorageChanged(changes, areaName);
+});
+
 chrome.runtime.onMessage.addListener((raw, sender, sendResponse) => {
   const message = parseRuntimeMessage(raw, __DEV__);
-  if (message?.type === 'ENSURE_OFFSCREEN' && isFromContentScript(sender, chrome.runtime.id)) {
+  const extensionId = chrome.runtime.id;
+
+  if (message?.type === 'ENSURE_OFFSCREEN' && isFromContentScript(sender, extensionId)) {
     offscreen.ensureOffscreen().then(
       () => sendResponse({ ok: true }),
       () => sendResponse({ ok: false }),
     );
     return true; // the response is sent asynchronously
   }
+
+  if (message?.type === 'OFFSCREEN_READY' && isFromOffscreen(sender, extensionId, chrome.runtime.getURL(OFFSCREEN_PATH))) {
+    settings.currentMessage().then(sendResponse, () => sendResponse(undefined));
+    return true;
+  }
+
   return false;
 });

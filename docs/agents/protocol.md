@@ -18,7 +18,8 @@ Design: `DESIGN.md` §2 (message flows), §8 (validation)
 ## Rules
 - Every receiver validates the payload with `parseScanPortMessage` /
   `parseRuntimeMessage` and the sender with `isFromContentScript` /
-  `isFromOffscreen`; invalid messages are ignored.
+  `isFromOffscreen` / `isFromExtensionContext` (`SETTINGS_UPDATED`: our id,
+  no tab); invalid messages are ignored.
 - Bytes: base64 must decode to exactly `size` bytes; `size` ≤ 45 MB.
 - Result types (`ScanResult`, `ErrorCode`, `MaskedFinding`): `src/shared/types.ts`.
 - No `externally_connectable`.

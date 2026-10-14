@@ -42,6 +42,8 @@ interface ContextFilter {
   documentUrls?: string[];
 }
 
+type StorageChangeListener = (changes: Record<string, chrome.storage.StorageChange>, areaName: string) => void;
+
 export interface ChromeFake {
   /** The object installed as globalThis.chrome. */
   readonly chrome: typeof chrome;
@@ -54,6 +56,16 @@ export interface ChromeFake {
   readonly onInstalled: FakeEvent<() => void>;
   readonly onStartup: FakeEvent<() => void>;
   readonly onMessage: FakeEvent<MessageListener>;
+  /** Contents of chrome.storage.local. */
+  readonly storageData: Record<string, unknown>;
+  readonly onStorageChanged: FakeEvent<StorageChangeListener>;
+  /** Every message passed to chrome.runtime.sendMessage. */
+  readonly sentMessages: unknown[];
+  /**
+   * Answers chrome.runtime.sendMessage. Default: rejects like Chrome does when
+   * no other extension context is listening.
+   */
+  sendMessageHandler: ((message: unknown) => Promise<unknown>) | null;
   /** Puts the fake on globalThis.chrome. */
   install(): void;
   /** Removes globalThis.chrome. */
@@ -67,6 +79,9 @@ export function createChromeFake(): ChromeFake {
   const onInstalled = createFakeEvent<() => void>();
   const onStartup = createFakeEvent<() => void>();
   const onMessage = createFakeEvent<MessageListener>();
+  const onStorageChanged = createFakeEvent<StorageChangeListener>();
+  const storageData: Record<string, unknown> = {};
+  const sentMessages: unknown[] = [];
 
   const getURL = (path: string) => `chrome-extension://${FAKE_EXTENSION_ID}/${path.replace(/^\//, '')}`;
 
@@ -79,6 +94,10 @@ export function createChromeFake(): ChromeFake {
     onInstalled,
     onStartup,
     onMessage,
+    storageData,
+    onStorageChanged,
+    sentMessages,
+    sendMessageHandler: null,
     install: () => void Reflect.set(globalThis, 'chrome', fake.chrome),
     uninstall: () => void Reflect.deleteProperty(globalThis, 'chrome'),
   };
@@ -97,6 +116,28 @@ export function createChromeFake(): ChromeFake {
     onInstalled,
     onStartup,
     onMessage,
+    async sendMessage(message: unknown) {
+      sentMessages.push(message);
+      if (fake.sendMessageHandler) return fake.sendMessageHandler(message);
+      throw new Error('Could not establish connection. Receiving end does not exist.');
+    },
+  };
+
+  const storage = {
+    local: {
+      async get(key: string) {
+        return key in storageData ? { [key]: structuredClone(storageData[key]) } : {};
+      },
+      async set(items: Record<string, unknown>) {
+        const changes: Record<string, chrome.storage.StorageChange> = {};
+        for (const [key, newValue] of Object.entries(items)) {
+          changes[key] = { oldValue: storageData[key], newValue };
+          storageData[key] = structuredClone(newValue);
+        }
+        onStorageChanged.dispatch(changes, 'local');
+      },
+    },
+    onChanged: onStorageChanged,
   };
 
   const offscreen = {
@@ -114,7 +155,7 @@ export function createChromeFake(): ChromeFake {
     },
   };
 
-  (fake as { chrome: unknown }).chrome = { runtime, offscreen };
+  (fake as { chrome: unknown }).chrome = { runtime, offscreen, storage };
   return fake;
 }
 
