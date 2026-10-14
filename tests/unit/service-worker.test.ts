@@ -75,6 +75,32 @@ describe('service worker start-up', () => {
   });
 });
 
+describe('content-script registration', () => {
+  it('registers the content script on install for the granted dev seed', async () => {
+    fake.grantedOrigins.push('http://localhost/*');
+    await startServiceWorker();
+    expect(fake.registeredScripts).toEqual([]); // not at every start-up
+    fake.onInstalled.dispatch();
+    await flushAsync();
+    expect(fake.registeredScripts.map((s) => s.matches)).toEqual([['http://localhost/*']]);
+  });
+
+  it('registers nothing on install when no allow-listed site is granted', async () => {
+    await startServiceWorker();
+    fake.onInstalled.dispatch();
+    await flushAsync();
+    expect(fake.registeredScripts).toEqual([]);
+  });
+
+  it('still keeps the offscreen document on install', async () => {
+    await startServiceWorker();
+    fake.offscreenDocuments.length = 0;
+    fake.onInstalled.dispatch();
+    await flushAsync();
+    expect(fake.offscreenDocuments).toHaveLength(1);
+  });
+});
+
 describe('ENSURE_OFFSCREEN', () => {
   it('re-creates a missing document for a content script and replies ok', async () => {
     await startServiceWorker();
