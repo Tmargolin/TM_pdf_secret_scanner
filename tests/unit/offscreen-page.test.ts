@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createScanSender } from '../../src/content/scan-sender.ts';
+import { createLogger } from '../../src/shared/safe-logger.ts';
 import { createChromeFake, FAKE_EXTENSION_ID, flushAsync, type ChromeFake } from '../helpers/chrome-fake.ts';
+import { createPortPair } from '../helpers/port-pair.ts';
 
 let fake: ChromeFake;
 
@@ -70,5 +73,63 @@ describe('pushed settings', () => {
     await loadOffscreenPage();
     deliver({ type: 'SETTINGS_UPDATED', settings: { appId: 'evil' } }, sender);
     expect(console.info).not.toHaveBeenCalledWith('[PSS:offscreen] settings updated', expect.anything());
+  });
+});
+
+describe('scan port (content script → offscreen document, direct)', () => {
+  const BATCH_ID = '6a2b3c4d-5555-4666-8777-988899990000';
+  const CONTENT_SCRIPT = { id: FAKE_EXTENSION_ID, tab: { id: 7 } as chrome.tabs.Tab, frameId: 0, origin: 'http://localhost:8787' };
+
+  /** A real scan sender whose ports are delivered to the page's onConnect listeners. */
+  const contentScript = () =>
+    createScanSender({
+      connect() {
+        const { client, server } = createPortPair(CONTENT_SCRIPT);
+        fake.onConnect.dispatch(server as unknown as chrome.runtime.Port);
+        return client;
+      },
+      ensureOffscreen: async () => false,
+      reportInterrupted: async () => {},
+      log: createLogger('content', { sink: () => {} }),
+    });
+
+  const batch = {
+    batchId: BATCH_ID,
+    requests: [
+      {
+        type: 'SCAN_REQUEST' as const,
+        scanId: '5f1c2a3e-1111-4222-8333-944455556666',
+        batchId: BATCH_ID,
+        fileName: 'a.pdf',
+        size: 3,
+        base64: 'YWJj',
+      },
+    ],
+  };
+
+  it('receives the batch and finishes it', async () => {
+    fake.sendMessageHandler = answerWith({});
+    await loadOffscreenPage();
+    expect(fake.onConnect.listeners).toHaveLength(1);
+    expect(await contentScript().send(batch)).toBe('done');
+    expect(console.info).toHaveBeenCalledWith('[PSS:offscreen] batch received', { files: 1 });
+  });
+
+  it('a batch that arrives before the settings waits for them', async () => {
+    await loadOffscreenPage(); // the service worker does not answer OFFSCREEN_READY
+    let outcome: string | undefined;
+    void contentScript()
+      .send(batch)
+      .then((o) => {
+        outcome = o;
+      });
+    await flushAsync();
+    expect(outcome).toBeUndefined();
+    expect(console.info).not.toHaveBeenCalledWith('[PSS:offscreen] batch received', expect.anything());
+
+    deliver({ type: 'SETTINGS_UPDATED', settings: {} }, { id: FAKE_EXTENSION_ID });
+    await flushAsync();
+    expect(outcome).toBe('done');
+    expect(console.info).toHaveBeenCalledWith('[PSS:offscreen] batch received', { files: 1 });
   });
 });
