@@ -101,6 +101,71 @@ describe('extractText – how pdf.js is used', () => {
   });
 });
 
+describe('extractText – abort (job timeout)', () => {
+  it('already aborted: fails with the abort reason and never opens the document', async () => {
+    const { recording, calls } = recordingPdfJs();
+    const controller = new AbortController();
+    controller.abort();
+    await expect(extractText(recording, fixture('one-page.pdf'), { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(calls).toEqual([]);
+  });
+
+  it('aborted while reading: fails and the document is destroyed', async () => {
+    const { recording, calls } = recordingPdfJs();
+    const controller = new AbortController();
+    const reading = extractText(recording, fixture('multi-page.pdf'), { signal: controller.signal });
+    controller.abort();
+    await expect(reading).rejects.toBeDefined();
+    expect(calls[0]?.destroyed).toBe(true);
+  });
+
+  it('abort ends a pdf.js call that would otherwise never finish (the task is destroyed at once)', async () => {
+    let failOpen: (error: Error) => void = () => {};
+    let destroyCalls = 0;
+    const hanging: PdfJs = {
+      getDocument: (() => ({
+        promise: new Promise((_resolve, reject) => {
+          failOpen = reject;
+        }),
+        destroy: async () => {
+          destroyCalls++;
+          failOpen(new Error('Worker was destroyed'));
+        },
+      })) as unknown as PdfJs['getDocument'],
+    };
+    const controller = new AbortController();
+    const reading = extractText(hanging, fixture('one-page.pdf'), { signal: controller.signal });
+    controller.abort();
+    await expect(reading).rejects.toThrow('Worker was destroyed');
+    expect(destroyCalls).toBeGreaterThan(0);
+  });
+
+  it('a shared worker survives an aborted document and reads the next one', async () => {
+    const worker = new pdfjs.PDFWorker({ verbosity: 0 });
+    try {
+      const controller = new AbortController();
+      const reading = extractText(pdfjs, fixture('multi-page.pdf'), { worker, signal: controller.signal });
+      controller.abort();
+      await reading.catch(() => {});
+      expect(worker.destroyed).toBe(false);
+      expect(await extractText(pdfjs, fixture('one-page.pdf'), { worker })).toEqual({ pages: ['Hello from a one-page PDF.'] });
+    } finally {
+      worker.destroy();
+    }
+  });
+
+  it('a signal that never aborts changes nothing', async () => {
+    const { signal } = new AbortController();
+    expect(await extractText(pdfjs, fixture('one-page.pdf'), { signal })).toEqual({ pages: ['Hello from a one-page PDF.'] });
+  });
+
+  it('extractPages after an abort still does not throw (the caller has given up on it)', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    expect(await extractPages(pdfjs, fixture('one-page.pdf'), { signal: controller.signal })).toEqual({ ok: false, code: 'PDF_INVALID' });
+  });
+});
+
 describe('joinTextItems', () => {
   it('joins text in order and adds a line break where pdf.js reports one', () => {
     expect(

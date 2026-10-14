@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createScanSender } from '../../src/content/scan-sender.ts';
 import { createLogger } from '../../src/shared/safe-logger.ts';
@@ -149,6 +150,32 @@ describe('scan port (content script → offscreen document, direct)', () => {
         },
       ],
     });
+  });
+
+  it('points pdf.js at the worker file inside the extension', async () => {
+    fake.sendMessageHandler = answerWith({});
+    await loadOffscreenPage();
+    expect(workerOptions.workerSrc).toBe(`chrome-extension://${FAKE_EXTENSION_ID}/offscreen/pdf.worker.mjs`);
+  });
+
+  it('a real PDF is extracted (placeholder result until scanning); dev logs codes only', async () => {
+    const bytes = readFileSync(new URL('../fixtures/one-page.pdf', import.meta.url));
+    const pdf = {
+      type: 'SCAN_REQUEST' as const,
+      scanId: '5f1c2a3e-1111-4222-8333-944455556666',
+      batchId: BATCH_ID,
+      fileName: 'secret-plans.pdf',
+      size: bytes.length,
+      base64: bytes.toString('base64'),
+    };
+    fake.sendMessageHandler = answerWith({});
+    await loadOffscreenPage();
+    await contentScript().send({ batchId: BATCH_ID, requests: [pdf] });
+    expect(fake.sentMessages).toContainEqual(
+      expect.objectContaining({ type: 'SHOW_RESULT', results: [expect.objectContaining({ fileName: 'secret-plans.pdf', status: 'clean' })] }),
+    );
+    expect(console.debug).toHaveBeenCalledWith('[PSS:offscreen] batch finished', { outcomes: ['clean'] });
+    expect(JSON.stringify(vi.mocked(console.debug).mock.calls)).not.toContain('secret-plans');
   });
 
   it('still finishes the batch when the service worker cannot be reached', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ReceivedBatch } from '../../src/offscreen/batch-receiver.ts';
 import { errorResult } from '../../src/offscreen/jobs.ts';
-import { placeholderOutcome, toShowResult } from '../../src/offscreen/results.ts';
+import { extractionOutcome, placeholderOutcome, toShowResult } from '../../src/offscreen/results.ts';
 import type { ScanResult } from '../../src/shared/types.ts';
 import { parseRuntimeMessage } from '../../src/shared/messages.ts';
 
@@ -27,6 +27,18 @@ const results: ScanResult[] = [
 describe('placeholderOutcome (until extraction and scanning)', () => {
   it('no findings and no errors', () => {
     expect(placeholderOutcome()).toEqual({ status: 'clean', findings: [], errors: [] });
+  });
+});
+
+describe('extractionOutcome (5.4)', () => {
+  it('text extracted: the placeholder until scanning exists, and the text is not kept', () => {
+    const outcome = extractionOutcome({ ok: true, pages: ['aws_access_key_id = AKIAIOSFODNN7EXAMPLE'] });
+    expect(outcome).toEqual(placeholderOutcome());
+    expect(JSON.stringify(outcome)).not.toContain('AKIA');
+  });
+
+  it.each(['PDF_ENCRYPTED', 'PDF_INVALID', 'NO_TEXT_LAYER'] as const)('%s → an error result with that code', (code) => {
+    expect(extractionOutcome({ ok: false, code })).toEqual({ status: 'error', findings: [], errors: [{ code }] });
   });
 });
 
