@@ -17,10 +17,19 @@ export function toBase64(bytes: Uint8Array): string {
   return pieces.join('');
 }
 
-/** The file as a SCAN_REQUEST; files above the hard limit go without bytes. */
-export async function toScanRequest(file: File, batchId: string, scanId: string): Promise<ScanRequest> {
+/**
+ * The file as a SCAN_REQUEST. Files above `maxBytes` (the maxFileSizeMB
+ * setting, never more than the protocol's hard limit) go without bytes, so the
+ * batch's notification can still say the file was too large to check.
+ */
+export async function toScanRequest(
+  file: File,
+  batchId: string,
+  scanId: string,
+  maxBytes: number = LIMITS.fileBytes,
+): Promise<ScanRequest> {
   const fileName = file.name.slice(0, LIMITS.fileNameChars);
   const base = { type: 'SCAN_REQUEST' as const, scanId, batchId, fileName, size: file.size };
-  if (file.size > LIMITS.fileBytes) return { ...base, skipped: 'FILE_TOO_LARGE' };
+  if (file.size > Math.min(maxBytes, LIMITS.fileBytes)) return { ...base, skipped: 'FILE_TOO_LARGE' };
   return { ...base, base64: toBase64(new Uint8Array(await file.arrayBuffer())) };
 }

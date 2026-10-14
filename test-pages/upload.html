@@ -5,34 +5,92 @@
   <title>PDF Secret Scanner – test page</title>
   <link rel="icon" href="data:,"> <!-- no favicon request (avoids a 404 in the console) -->
   <style>
-    body { font: 15px/1.5 system-ui, sans-serif; max-width: 42rem; margin: 2rem auto; padding: 0 1rem; color: #1b2733; }
-    section { border: 1px solid #c9d3de; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
-    h2 { font-size: 1rem; margin: 0 0 .5rem; }
+    body { font: 15px/1.5 system-ui, sans-serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; color: #1b2733; }
+    section { border: 1px solid #c9d3de; border-radius: 8px; padding: .8rem 1rem; margin: .8rem 0; }
+    h2 { font-size: 1rem; margin: 0 0 .4rem; }
     p.note { color: #55636f; font-size: .9rem; }
+    .zone { border: 2px dashed #8a99a8; border-radius: 8px; padding: 1.2rem; text-align: center; color: #55636f; }
+    .zone.over { background: #eef4fb; }
+    #log { font: 13px ui-monospace, monospace; background: #f5f7f9; border-radius: 6px; padding: .6rem; min-height: 3rem; white-space: pre-wrap; }
   </style>
 </head>
 <body>
   <h1>PDF Secret Scanner – test page</h1>
   <p class="note">
-    Local page for manual tests (docs/manual-tests.md). Open it as
-    <code>http://localhost:&lt;port&gt;/upload.html</code> with a <b>dev build</b> loaded –
-    only <code>localhost</code> is on the dev allow list (not 127.0.0.1).
-    Nothing is uploaded: the files stay in this page.
+    A tiny "site" that obtains files in every way the extension's hooks cover (docs/manual-tests.md).
+    Open it as <code>http://localhost:&lt;port&gt;/upload.html</code> with a <b>dev build</b> loaded.
+    Nothing is uploaded: the files stay in this page. Only PDFs are checked; each action is one batch.
   </p>
 
-  <section>
-    <h2>1. Single file</h2>
-    <input id="single" type="file" accept=".pdf,application/pdf">
-  </section>
+  <section><h2>1. File input</h2><input id="single" type="file"></section>
+  <section><h2>2. Several files</h2><input id="multiple" type="file" multiple></section>
+  <section><h2>3. Detached input (never added to the page)</h2><button id="detached" type="button">Choose a file…</button></section>
+  <section><h2>4. Input inside a closed shadow DOM</h2><div id="shadow-host"></div></section>
+  <section><h2>5. Drag &amp; drop – files or a folder</h2><div id="drop" class="zone">Drop files or a folder here</div></section>
+  <section><h2>6. Paste</h2><p class="note">Copy a file in the file manager, click this page, press Ctrl+V.</p></section>
+  <section><h2>7. File System Access API</h2><button id="picker" type="button">showOpenFilePicker…</button></section>
 
-  <section>
-    <h2>2. Several files</h2>
-    <input id="multiple" type="file" multiple>
-  </section>
+  <h2>What the site received</h2>
+  <div id="log"></div>
 
-  <p class="note">
-    Step 4 adds detached inputs, shadow DOM, drag &amp; drop, paste, folder drop and
-    showOpenFilePicker.
-  </p>
+  <script>
+    // --- "site" code: obtains files the way real sites do ---
+    const log = (how, files) => {
+      const line = `${new Date().toLocaleTimeString()}  ${how}: ${files.map((f) => f.name).join(', ') || '(none)'}\n`;
+      document.getElementById('log').textContent += line;
+    };
+    const watchInput = (input, how) => input.addEventListener('change', () => log(how, [...input.files]));
+
+    watchInput(document.getElementById('single'), 'file input');
+    watchInput(document.getElementById('multiple'), 'several files');
+
+    document.getElementById('detached').addEventListener('click', () => {
+      const input = document.createElement('input');
+      input.type = 'file';
+      watchInput(input, 'detached input');
+      input.click();
+    });
+
+    const root = document.getElementById('shadow-host').attachShadow({ mode: 'closed' });
+    const shadowInput = document.createElement('input');
+    shadowInput.type = 'file';
+    root.append(shadowInput);
+    watchInput(shadowInput, 'closed shadow DOM');
+
+    // Drop: plain files via dataTransfer.files, folders via entries (webkitGetAsEntry → readEntries → file).
+    const zone = document.getElementById('drop');
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('over'));
+    zone.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      zone.classList.remove('over');
+      const entries = [...e.dataTransfer.items].map((item) => item.webkitGetAsEntry()).filter(Boolean);
+      if (!entries.some((entry) => entry.isDirectory)) return log('drop', [...e.dataTransfer.files]);
+      const files = [];
+      const walk = async (entry) => {
+        if (entry.isFile) { files.push(await new Promise((ok, fail) => entry.file(ok, fail))); return; }
+        const reader = entry.createReader();
+        for (;;) {
+          const batch = await new Promise((ok, fail) => reader.readEntries(ok, fail));
+          if (batch.length === 0) return;
+          for (const child of batch) await walk(child);
+        }
+      };
+      for (const entry of entries) await walk(entry);
+      log('folder drop', files);
+    });
+
+    document.addEventListener('paste', (e) => {
+      const files = [...e.clipboardData.files];
+      if (files.length > 0) log('paste', files);
+    });
+
+    document.getElementById('picker').addEventListener('click', async () => {
+      try {
+        const handles = await window.showOpenFilePicker({ multiple: true });
+        log('showOpenFilePicker', await Promise.all(handles.map((h) => h.getFile())));
+      } catch { /* cancelled */ }
+    });
+  </script>
 </body>
 </html>
