@@ -963,6 +963,10 @@ passes all tests.
 - Other file types (DOCX, TXT…).
 - Event-listener safety net for detection (see §3) – decided at step 8.
 - Files a site deliberately hides from the hooks (out of scope by threat model).
+- A site on the allow list whose Chrome access was revoked or never granted is
+  silently not scanned (§3.1: scripts run on allow list ∩ granted). Future
+  feature: per-site status in the options page ("active" / "access not
+  granted") with a button that requests access again.
 
 ---
 

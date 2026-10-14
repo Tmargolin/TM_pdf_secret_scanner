@@ -92,6 +92,11 @@ with the extension loaded, local test pages and a mock API.
 - Per-tab rate limiting
 - OCR for scanned PDFs, other file types
 - Automated end-to-end tests with Playwright
+- Per-site access status in the options page. A site is scanned only when it
+  is on the allow list **and** Chrome access is granted. If access is revoked
+  (e.g. in `chrome://extensions`) or the permission prompt was declined, the
+  site stays on the list but is silently not scanned. Future: show each site
+  as "active" or "access not granted" with a button that requests access again
 
 ## For developers and AI agents
 
