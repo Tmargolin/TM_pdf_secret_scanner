@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "audit": "npm audit --audit-level=high"
+    "audit": "npm audit --audit-level=high",
+    "mock-api": "node scripts/mock-api.mjs"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.5",

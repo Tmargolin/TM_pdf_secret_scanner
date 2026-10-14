@@ -23,3 +23,9 @@ Design: `DESIGN.md` §8 (permissions), §9, §10, §15
 ## Rules
 - Never commit `dist/`, `node_modules/`, zips, or any APP-ID.
 - `probe-api.mjs` reads `PSS_APP_ID` from the environment; prints no secrets.
+- `mock-api.mjs` (`npm run mock-api`): `http://localhost:8787/api/protect`; env
+  `MOCK_PORT`, `MOCK_APP_ID` (only accepted APP-ID, default `mock-app-id`;
+  others → 401), `MOCK_SCAN_WINDOW` (default 131072, text beyond is
+  silently ignored like the real API), `MOCK_MODE` (`normal` | `413` | `429` |
+  `500` | `timeout` | `malformed`), `MOCK_LATENCY_MS`. Behaviour must match
+  `DESIGN.md` §5.
