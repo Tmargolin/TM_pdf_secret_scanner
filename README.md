@@ -12,6 +12,15 @@ alerts.
 ## Requirements
 
 - Google Chrome 120 or later
+- **Notifications enabled for Google Chrome in the operating system.** All
+  alerts are Chrome notifications; if they are blocked, the extension still
+  scans but you will not see any alert.
+  - Windows: Settings → System → Notifications – Notifications on, **Google
+    Chrome** on; Do not disturb / Focus Assist off (otherwise alerts only go
+    to the notification center, Win+N).
+  - macOS: System Settings → Notifications → Google Chrome – Allow
+    notifications.
+  - In Chrome itself, notifications of this extension must not be turned off.
 - Node.js 24 or later (for building and testing)
 
 ## Setup
@@ -92,6 +101,8 @@ with the extension loaded, local test pages and a mock API.
 - Per-tab rate limiting
 - OCR for scanned PDFs, other file types
 - Automated end-to-end tests with Playwright
+- Toolbar badge ("!" on the extension icon) when notifications are blocked in
+  Chrome (blocking by the operating system cannot be detected)
 - Per-site access status in the options page. A site is scanned only when it
   is on the allow list **and** Chrome access is granted. If access is revoked
   (e.g. in `chrome://extensions`) or the permission prompt was declined, the

@@ -601,9 +601,17 @@ Notes:
 - All strings live in `_locales/en/messages.json` (`chrome.i18n`,
   `default_locale: "en"` in the manifest) from the start, so other languages (e.g. Hebrew) can be added without code changes.
 - **OS settings matter:** if the user has disabled notifications for Chrome or
-  enabled Focus Assist / Do Not Disturb, notifications may be hidden. The
-  options page checks `chrome.notifications.getPermissionLevel()` and shows a
-  warning; the README explains how to enable them.
+  enabled Focus Assist / Do Not Disturb, notifications may be hidden. Two
+  levels:
+  - *Blocked in Chrome* (for this extension) – detectable:
+    `chrome.notifications.getPermissionLevel()` is `"denied"`. The options page
+    shows a warning, and the service worker logs it at start-up and on
+    `onPermissionLevelChanged` (step 3.5).
+  - *Blocked by the operating system* – **not detectable**: Chrome hands the
+    notification to the OS and `create()` succeeds. Seen in step 2 on Windows.
+    The README lists enabled Chrome notifications as a requirement.
+  - Future option: a toolbar badge ("!" on the extension icon) when blocked in
+    Chrome – the only alert visible without opening anything.
 - No "scanning…" indicator in v1.
 
 ---
@@ -862,8 +870,8 @@ passes all tests.
    b. `test(background): cover revoke in chrome://extensions, restart and list edits`
 4. a. `feat: open options page on install`
    b. `test: options page opens on first install only`
-5. a. `feat(options): warn when notifications are blocked`
-   b. `test(options): cover permission-level warning`
+5. a. `feat: warn and log when notifications are blocked in Chrome`
+   b. `test: cover permission-level warning and log`
 → tag `step-3`
 
 **Step 4 – hand-off detection**
@@ -956,6 +964,8 @@ passes all tests.
 - Incognito windows not supported.
 - No per-tab rate limit: a hostile page could flood scans (DoS of quota/CPU).
 - Enterprise policy deployment (`chrome.storage.managed`) – future option.
+- OS-level notification blocking cannot be detected (§7); Chrome-level blocking
+  is warned about. Future option: toolbar badge when blocked in Chrome.
 - Notifications only: no in-page UI, no details view. Future options: a
   details page opened by clicking the notification, and a recent-scans history
   in the extension popup.
