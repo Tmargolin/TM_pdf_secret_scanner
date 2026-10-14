@@ -101,6 +101,106 @@ describe('content-script registration', () => {
   });
 });
 
+describe('reconcile triggers (step 3)', () => {
+  const EXAMPLE = '*://example.com/*';
+  const LOCALHOST = 'http://localhost/*';
+  const matches = () => fake.registeredScripts.map((s) => s.matches);
+  /** Options-page code running against the same fake (other context, same chrome.* state). */
+  const optionsPage = async () => {
+    const { addSite, removeSite, chromePermissionsApi } = await import('../../src/options/sites.ts');
+    const { createLogger } = await import('../../src/shared/safe-logger.ts');
+    const deps = {
+      storage: fake.chrome.storage.local,
+      permissions: chromePermissionsApi(),
+      dev: true,
+      log: createLogger('options', { sink: () => {} }),
+    };
+    return {
+      add: (input: string, shown: string[]) => addSite(input, shown, deps),
+      remove: (pattern: string) => removeSite(pattern, deps),
+    };
+  };
+  /** Lets the chained reconcile runs finish. */
+  const settle = async () => {
+    for (let i = 0; i < 3; i++) await flushAsync();
+  };
+
+  it('listens for permission changes', async () => {
+    await startServiceWorker();
+    expect(fake.onPermissionsAdded.listeners).toHaveLength(1);
+    expect(fake.onPermissionsRemoved.listeners).toHaveLength(1);
+  });
+
+  it('browser restart: reconciles on onStartup', async () => {
+    fake.grantedOrigins.push(LOCALHOST);
+    await startServiceWorker();
+    fake.onStartup.dispatch();
+    await settle();
+    expect(matches()).toEqual([[LOCALHOST]]);
+  });
+
+  it('adding a site in the options page registers it at once (no extension reload)', async () => {
+    fake.grantedOrigins.push(LOCALHOST);
+    await startServiceWorker();
+    const page = await optionsPage();
+    expect((await page.add('example.com', [LOCALHOST])).ok).toBe(true);
+    await settle();
+    expect(matches()).toEqual([[LOCALHOST, EXAMPLE]]);
+  });
+
+  it('removing a site in the options page unregisters it', async () => {
+    fake.grantedOrigins.push(LOCALHOST);
+    await startServiceWorker();
+    const page = await optionsPage();
+    await page.add('example.com', [LOCALHOST]);
+    await settle();
+    await page.remove(EXAMPLE);
+    await settle();
+    expect(matches()).toEqual([[LOCALHOST]]);
+  });
+
+  it('revoking a site in chrome://extensions stops scanning there; granting it again restarts it', async () => {
+    fake.grantedOrigins.push(LOCALHOST);
+    await startServiceWorker();
+    const page = await optionsPage();
+    await page.add('example.com', [LOCALHOST]);
+    await settle();
+
+    fake.grantedOrigins.splice(fake.grantedOrigins.indexOf(EXAMPLE), 1); // Chrome's Site access → remove
+    fake.onPermissionsRemoved.dispatch({ origins: [EXAMPLE] });
+    await settle();
+    expect(matches()).toEqual([[LOCALHOST]]);
+
+    fake.grantedOrigins.push(EXAMPLE); // granted again from Chrome's menu
+    fake.onPermissionsAdded.dispatch({ origins: [EXAMPLE] });
+    await settle();
+    expect(matches()).toEqual([[LOCALHOST, EXAMPLE]]);
+  });
+
+  it('revoking the last site unregisters the script', async () => {
+    fake.grantedOrigins.push(LOCALHOST);
+    await startServiceWorker();
+    fake.onInstalled.dispatch();
+    await settle();
+    fake.grantedOrigins.length = 0;
+    fake.onPermissionsRemoved.dispatch({ origins: [LOCALHOST] });
+    await settle();
+    expect(fake.registeredScripts).toEqual([]);
+  });
+
+  it('saving other settings does not touch the registration', async () => {
+    fake.grantedOrigins.push(LOCALHOST);
+    fake.storageData['settings'] = getDefaultSettings(true); // settings saved before (not a first save)
+    await startServiceWorker();
+    fake.onInstalled.dispatch();
+    await settle();
+    const before = fake.scriptingCalls.length;
+    await fake.chrome.storage.local.set({ settings: { ...getDefaultSettings(true), appId: 'new-id' } });
+    await settle();
+    expect(fake.scriptingCalls).toHaveLength(before);
+  });
+});
+
 describe('ENSURE_OFFSCREEN', () => {
   it('re-creates a missing document for a content script and replies ok', async () => {
     await startServiceWorker();

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  allowListChanged,
   chromeScriptingApi,
   CONTENT_SCRIPT_FILE,
   CONTENT_SCRIPT_ID,
@@ -209,5 +210,20 @@ describe('failures and logging', () => {
     expect(lines).toEqual([
       { level: 'info', line: '[PSS:sw] content scripts reconciled', fields: { allowed: 2, active: 1 } },
     ]);
+  });
+});
+
+describe('allowListChanged (storage.onChanged filter)', () => {
+  const settings = (allowedSites: string[], appId = '') => ({ ...getDefaultSettings(false), allowedSites, appId });
+  it.each([
+    ['a site was added', { settings: { oldValue: settings([]), newValue: settings([MAIL]) } }, 'local', true],
+    ['a site was removed', { settings: { oldValue: settings([MAIL, SLACK]), newValue: settings([SLACK]) } }, 'local', true],
+    ['first save ever', { settings: { newValue: settings([MAIL]) } }, 'local', true],
+    ['settings were deleted', { settings: { oldValue: settings([MAIL]) } }, 'local', true],
+    ['only the APP-ID changed', { settings: { oldValue: settings([MAIL]), newValue: settings([MAIL], 'id') } }, 'local', false],
+    ['another key changed', { other: { oldValue: 1, newValue: 2 } }, 'local', false],
+    ['another storage area', { settings: { oldValue: settings([]), newValue: settings([MAIL]) } }, 'sync', false],
+  ])('%s → %s', (_name, changes, area, expected) => {
+    expect(allowListChanged(changes, area)).toBe(expected);
   });
 });
