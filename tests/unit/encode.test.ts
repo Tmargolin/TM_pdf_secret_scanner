@@ -66,3 +66,22 @@ describe('toScanRequest', () => {
     expect(parseScanPortMessage(request)).toEqual(request);
   });
 });
+
+describe('toScanRequest – the maxFileSizeMB setting', () => {
+  const MB = 1024 * 1024;
+
+  it('a file above the setting goes without bytes (FILE_TOO_LARGE)', async () => {
+    const request = await toScanRequest(new File([bytes(2 * MB)], 'big.pdf'), BATCH_ID, SCAN_ID, 1 * MB);
+    expect(request).toEqual({ type: 'SCAN_REQUEST', scanId: SCAN_ID, batchId: BATCH_ID, fileName: 'big.pdf', size: 2 * MB, skipped: 'FILE_TOO_LARGE' });
+  });
+
+  it('a file exactly at the setting is still sent', async () => {
+    const request = await toScanRequest(new File([bytes(MB)], 'edge.pdf'), BATCH_ID, SCAN_ID, MB);
+    expect('base64' in request).toBe(true);
+  });
+
+  it('a setting above the protocol limit is capped at that limit', async () => {
+    const huge = { name: 'huge.pdf', size: LIMITS.fileBytes + 1, arrayBuffer: async () => new ArrayBuffer(0) } as unknown as File;
+    expect(await toScanRequest(huge, BATCH_ID, SCAN_ID, 1_000 * MB)).toMatchObject({ skipped: 'FILE_TOO_LARGE' });
+  });
+});
