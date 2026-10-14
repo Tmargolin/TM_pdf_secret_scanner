@@ -1028,7 +1028,7 @@ Chromium, type check, all Vitest projects with coverage, `npm audit`, dev and
 release builds.
 
 **Infrastructure:** Node.js LTS + npm; dev dependencies `typescript`,
-`esbuild`, `vitest`, `@vitest/browser`, `playwright`, `@vitest/coverage-v8`,
+`esbuild`, `vitest`, `@vitest/browser-playwright`, `playwright`, `@vitest/coverage-v8`,
 `@types/chrome`, `pdf-lib` (none ship in the extension); Playwright Chromium;
 local scripts `serve-test-pages`, `mock-api`, `make-fixtures`, `probe-api`.
 

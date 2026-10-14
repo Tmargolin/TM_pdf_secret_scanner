@@ -1,8 +1,10 @@
+import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 
 // Test levels (DESIGN.md §15):
 // - unit:    plain logic in Node            → tests/unit/**
 // - browser: page-level code in Chromium    → tests/browser/**
+// Projects inherit the root options (Vitest 5 default).
 export default defineConfig({
   test: {
     passWithNoTests: true,
@@ -16,7 +18,6 @@ export default defineConfig({
     },
     projects: [
       {
-        extends: true,
         test: {
           name: 'unit',
           environment: 'node',
@@ -24,13 +25,12 @@ export default defineConfig({
         },
       },
       {
-        extends: true,
         test: {
           name: 'browser',
           include: ['tests/browser/**/*.test.ts'],
           browser: {
             enabled: true,
-            provider: 'playwright',
+            provider: playwright(),
             headless: true,
             instances: [{ browser: 'chromium' }],
           },
