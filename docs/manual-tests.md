@@ -83,3 +83,28 @@ PDFs in a subfolder. Each action below is one batch → **one notification**
 
 Oversized PDFs (above *Maximum PDF size*) are sent without bytes; the skeleton
 notification does not show it yet (step 7) – covered by automated tests.
+
+## Step 5 – extraction and job system
+
+Dev build loaded, test page open and reloaded. Offscreen console with log
+level **Verbose**: each batch logs `batch received { files: N }` and then
+`batch finished { outcomes: [...] }` – one code per file, in the order the
+page got them (`clean` here only means the text was read; nothing is checked
+before step 6). PDFs: `tests/fixtures/`.
+
+| # | Do | Expect (offscreen console) |
+|---|---|---|
+| 5.1 | Reload the extension | `offscreen document loaded`, `settings received`; no errors, no pdf.js warnings. |
+| 5.2 | Section 1: `one-page.pdf` | `outcomes: ['clean']`; notification as before. |
+| 5.3 | Section 1: `encrypted.pdf` | `['PDF_ENCRYPTED']` |
+| 5.4 | Section 1: `no-text.pdf` | `['NO_TEXT_LAYER']` |
+| 5.5 | Section 1: `owner-password-only.pdf` | `['clean']` – opens without a password, so it is read. |
+| 5.6 | Section 2: all 9 fixture PDFs at once | **One** `batch received { files: 9 }` and one `batch finished` with 9 codes: `PDF_ENCRYPTED` and `NO_TEXT_LAYER` once each, the rest `clean`. |
+| 5.7 | Offscreen DevTools → Sources → **Threads** pane (or the console's context drop-down) | Exactly **one** `pdf.worker.mjs` thread; still one after repeating 5.6. |
+| 5.8 | Section 1: a large real PDF of your own (many pages, several MB) | `['clean']` (or a PDF code), within a few seconds; no warnings. |
+| 5.9 | Options → Advanced: *Files waiting* 10 MB, *Maximum PDF size* ≥ 10 → Save. Section 2: PDFs of your own totalling > 10 MB (e.g. three of 4–5 MB) | The files that no longer fit → `QUEUE_FULL` (warning `queue full: file not scanned`), the others read. **Restore defaults** afterwards (APP-ID is kept). |
+| 5.10 | Look through every extension console | No file names and no PDF text in any line. |
+| 5.11 | `npm run build` (release) | `dist/offscreen/pdf.worker.mjs` exists. Reload, repeat 5.2: works; no `batch finished` line (debug lines are dev-only). Rebuild with `npm run build:dev` afterwards. |
+
+Job timeout, the extraction limit and aborting are covered by automated tests
+(they need very slow or very large files to see by hand).
