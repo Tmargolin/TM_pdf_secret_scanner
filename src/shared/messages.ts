@@ -39,6 +39,21 @@ export interface BatchEnd {
 
 export type ScanPortMessage = ScanRequest | BatchEnd;
 
+/** offscreen document → content script, over the scan port: every file of the batch arrived (D35). */
+export interface BatchAccepted {
+  type: 'BATCH_ACCEPTED';
+  batchId: string;
+}
+
+/** offscreen document → content script, over the scan port: every job ended; the port closes next (D35). */
+export interface BatchDone {
+  type: 'BATCH_DONE';
+  batchId: string;
+}
+
+/** Replies on the scan port. They carry no results: results never go back to the page. */
+export type ScanPortReply = BatchAccepted | BatchDone;
+
 /** offscreen document → service worker, once it has loaded. Reply: SettingsReply. */
 export interface OffscreenReady {
   type: 'OFFSCREEN_READY';
@@ -126,6 +141,14 @@ export function parseScanPortMessage(data: unknown): ScanPortMessage | null {
   if ('skipped' in data || typeof base64 !== 'string') return null;
   if (size > LIMITS.fileBytes || base64DecodedLength(base64) !== size || !BASE64.test(base64)) return null;
   return { type: 'SCAN_REQUEST', scanId, batchId, fileName, size, base64 };
+}
+
+/** Replies arriving on the scan port (content script side). */
+export function parseScanPortReply(data: unknown): ScanPortReply | null {
+  if (!isRecord(data) || !isId(data['batchId'])) return null;
+  if (data['type'] === 'BATCH_ACCEPTED') return { type: 'BATCH_ACCEPTED', batchId: data['batchId'] };
+  if (data['type'] === 'BATCH_DONE') return { type: 'BATCH_DONE', batchId: data['batchId'] };
+  return null;
 }
 
 function parseFinding(v: unknown): MaskedFinding | null {

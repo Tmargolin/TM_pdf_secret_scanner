@@ -14,6 +14,9 @@ Design: `DESIGN.md` §2, §4, §4.1
   registered with the safe logger.
 
 ## Outputs
+- On the scan port: `BATCH_ACCEPTED` after `BATCH_END` with all files
+  received; `BATCH_DONE` when every job of the batch ended, then
+  `port.disconnect()`.
 - `SHOW_RESULT` (one per batch, masked findings only) → service worker.
 - `fetch` to the API (via `src/scanner/api-client.ts`).
 

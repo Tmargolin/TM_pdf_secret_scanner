@@ -9,6 +9,8 @@ Design: `DESIGN.md` §2 (message flows), §8 (validation)
 | `File` | MAIN world → content | `MessagePort` | `File` |
 | `SCAN_REQUEST` | content → offscreen | port `scan-batch` | `scanId, batchId, fileName, size, base64` or `skipped: 'FILE_TOO_LARGE'` (no bytes) |
 | `BATCH_END` | content → offscreen | port `scan-batch` | `batchId, fileCount` – all files of the batch sent |
+| `BATCH_ACCEPTED` | offscreen → content | port `scan-batch` | `batchId` – all files received |
+| `BATCH_DONE` | offscreen → content | port `scan-batch` | `batchId` – all jobs ended; offscreen then closes the port |
 | `OFFSCREEN_READY` | offscreen → service worker | `runtime.sendMessage` | – (reply: `SETTINGS_UPDATED`) |
 | `SETTINGS_UPDATED` | service worker → offscreen | `runtime.sendMessage` | settings |
 | `SHOW_RESULT` | offscreen → service worker | `runtime.sendMessage` | `batchId, origin` (from `port.sender`), `results: ScanResult[]` (masked findings only) |
@@ -17,11 +19,11 @@ Design: `DESIGN.md` §2 (message flows), §8 (validation)
 
 ## Rules
 - Every receiver validates the payload with `parseScanPortMessage` /
-  `parseRuntimeMessage` and the sender with `isFromContentScript` /
+  `parseScanPortReply` (content side) / `parseRuntimeMessage` and the sender with `isFromContentScript` /
   `isFromOffscreen` / `isFromExtensionContext` (`SETTINGS_UPDATED`: our id,
   no tab); invalid messages are ignored.
 - Bytes: base64 must decode to exactly `size` bytes; `size` ≤ 45 MB.
 - Result types (`ScanResult`, `ErrorCode`, `MaskedFinding`): `src/shared/types.ts`.
 - No `externally_connectable`.
-- Results never go back to the page.
+- Results never go back to the page (port replies carry only `batchId`).
 - New message: add type + validator + row here, in one commit.

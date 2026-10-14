@@ -114,17 +114,21 @@ nothing is lost.
    Only the offscreen document listens for these ports; it reads `tabId`,
    `frameId` and the site's origin from `port.sender` and runs the jobs. After
    the last file the content script sends `BATCH_END { fileCount }`, so the
-   offscreen document knows when the batch is complete.
+   offscreen document knows when the batch is complete. The offscreen document
+   answers on the same port with `BATCH_ACCEPTED` (all files received) and,
+   when every job has ended, `BATCH_DONE`, then closes the port (D35). Neither
+   carries results.
 4. **Result:** when all jobs of a batch end, the offscreen document sends one
    `SHOW_RESULT` message (masked findings only) to the service worker (woken
    by it if stopped), which calls `chrome.notifications.create`. The result
    never travels back to the page.
-5. **Self-healing:** if the connect fails because no offscreen document exists
-   ("Receiving end does not exist"), the content script sends
-   `ENSURE_OFFSCREEN` to the service worker, waits for the reply, and retries
-   once. If it still fails, or the offscreen document disconnects mid-scan, the
-   content script sends `SCAN_INTERRUPTED` to the service worker → failure
-   notification.
+5. **Self-healing:** if the port closes before `BATCH_ACCEPTED` (e.g. no
+   offscreen document: "Receiving end does not exist"), the files never
+   arrived: the content script sends `ENSURE_OFFSCREEN` to the service worker,
+   waits for the reply, and resends the batch once. If that fails too, or the
+   port closes after `BATCH_ACCEPTED` but before `BATCH_DONE` (offscreen
+   document died mid-scan), the content script sends `SCAN_INTERRUPTED` to the
+   service worker → failure notification. No matching of Chrome's error text.
 
 To verify in step 2 (walking skeleton): (a) content-script ports reach the offscreen document's
 `runtime.onConnect` directly (expected per Chrome messaging rules); (b)
@@ -839,11 +843,13 @@ passes all tests.
    b. `test: cover handshake, early jobs waiting and updates`
 6. a. `feat(background): reconcile content-script registration with the allow list`
    b. `test(background): registers granted allow-listed sites only; idempotent; dev seed`
-7. a. `feat(content): send selected files directly to the offscreen document over a port`
+7. a. `feat(shared): add BATCH_ACCEPTED and BATCH_DONE replies on the scan port`
+   b. `test(shared): reply validators accept valid and reject malformed replies`
+8. a. `feat(content): send selected files directly to the offscreen document over a port`
    b. `test(content): cover port connect, self-healing ENSURE_OFFSCREEN retry and sender validation`
-8. a. `feat: show a basic notification for each received batch`
+9. a. `feat: show a basic notification for each received batch`
    b. `test: offscreen → service worker SHOW_RESULT → notification`
-9. `docs: record verification of direct ports and message serialisation; add test page, local server and manual checklist`
+10. `docs: record verification of direct ports and message serialisation; add test page, local server and manual checklist`
 → tag `step-2`
 
 **Step 3 – options & allow list**
@@ -1011,6 +1017,7 @@ Decisions challenged before implementation (2026-10-14).
 | D32 | **Step order:** repo → API probing → walking skeleton → options & allow list → detection → extraction & jobs → scanning → notifications → real-site testing → hardening (v1.0.0) → offscreen lifecycle (v1.1.0); each step gated by the developer's manual check | Original 0–7 order (detection first, probing at end of step 3) | Unknowns (API behaviour, messaging architecture) settled first; no step uses code built later; smaller steps; something runnable from step 2. |
 | D33 | **Agent guide graph:** `AGENTS.md` master + `docs/agents/*.md` per component; `CLAUDE.md` imports `AGENTS.md`; facts and rules only, kept in sync per commit | Single large file; no agent docs | Agents read only the part they need; no redundancy with DESIGN.md; `AGENTS.md` is the name most coding agents look for. |
 | D34 | From probing: `chunkSize` 32,000 (max 50,000), `maxRequestBytes` 64 KB, "cut short" = reported `characters` < sent, new `API_UNAUTHORIZED`, never send empty chunks | Keep 4,000 / 64,000; rely on 413 | The API returns 200 "clean" while silently not scanning text beyond ~128–256k characters; 32k gives a 4× margin with few calls. |
+| D35 | Offscreen document replies on the scan port: `BATCH_ACCEPTED` (all files received) and `BATCH_DONE` (all jobs ended, then port closed); the content script retries only before `BATCH_ACCEPTED` and reports `SCAN_INTERRUPTED` for a close after it | One-way port; infer from `onDisconnect` / Chrome's error text | `onDisconnect` looks the same for "never connected", "finished" and "crashed"; explicit replies make retry vs interrupted unambiguous. Replies carry no results (results never reach the page). |
 
 ---
 

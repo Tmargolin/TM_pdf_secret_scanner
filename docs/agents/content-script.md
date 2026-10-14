@@ -17,8 +17,10 @@ Port `chrome.runtime.connect({ name: 'scan-batch' })` → `SCAN_REQUEST` per fil
 2. Size > `maxFileSizeMB` → send name + size only, `skipped: 'FILE_TOO_LARGE'`.
 3. Files within the same task / 300 ms → one batch (`batchId`), one port.
 4. Bytes sent as base64.
-5. Connect fails → `ENSURE_OFFSCREEN` to service worker → retry once.
-   Still failing or port drops mid-scan → `SCAN_INTERRUPTED` to service worker.
+5. Port closes before `BATCH_ACCEPTED` → `ENSURE_OFFSCREEN` to service worker →
+   resend the batch once. Closes again before `BATCH_ACCEPTED`, or closes after
+   `BATCH_ACCEPTED` but before `BATCH_DONE` → `SCAN_INTERRUPTED` to service
+   worker. `BATCH_DONE` → finished. Never match Chrome's error text.
 
 ## Rules
 - Treat data from the MAIN world as untrusted (must be `File`, size-checked).
