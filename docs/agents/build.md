@@ -5,7 +5,7 @@ Design: `DESIGN.md` §8 (permissions), §9, §10, §15
 | Item | Path |
 |---|---|
 | Build (esbuild) | `build.ts` (run by Node directly) → `dist/`; `npm run build` release, `npm run build:dev` dev |
-| Bundled entry points | ES modules: `background/service-worker`, `offscreen/offscreen` (+ `src/offscreen/offscreen.html` copied to `dist/offscreen/`); classic scripts (`iife`): `content/content` ← `src/content/index.ts` |
+| Bundled entry points | ES modules: `background/service-worker`, `offscreen/offscreen`, `options/options` (+ `offscreen.html`, `options.html` copied next to them); classic scripts (`iife`): `content/content` ← `src/content/index.ts` |
 | Manifest generation | `scripts/manifest.ts` (`createManifest`; dev adds `http://localhost/*`) |
 | Dev flag in code | `__DEV__` (esbuild `define`; declared in `src/globals.d.ts`) |
 | Manifest | `manifest.json` (template; dev adds `http://localhost/*` + allow-list seed) |

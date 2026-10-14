@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PDF Secret Scanner – settings</title>
+  <link rel="icon" href="../icons/icon-32.png">
+  <style>
+    :root { --text: #1b2733; --muted: #55636f; --line: #c9d3de; --accent: #17406e; --error: #b3261e; --ok: #1e6b35; }
+    body { font: 15px/1.5 system-ui, sans-serif; color: var(--text); max-width: 46rem; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.4rem; display: flex; align-items: center; gap: .6rem; }
+    h1 img { width: 32px; height: 32px; }
+    section, details { border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.2rem; margin: 1rem 0; }
+    summary { cursor: pointer; font-weight: 600; }
+    h2 { font-size: 1.05rem; margin: 0 0 .6rem; }
+    .field { margin: .9rem 0; }
+    label { display: block; font-weight: 600; }
+    input[type=text], input[type=password], input[type=number] { font: inherit; padding: .35rem .5rem; border: 1px solid var(--line); border-radius: 6px; width: 100%; box-sizing: border-box; }
+    input[type=number] { width: 12rem; }
+    input[aria-invalid=true] { border-color: var(--error); }
+    .unit { color: var(--muted); margin-left: .4rem; }
+    .help { color: var(--muted); font-size: .9rem; margin: .15rem 0 0; }
+    .error { color: var(--error); font-size: .9rem; margin: .2rem 0 0; }
+    .inline { font-weight: normal; display: inline-flex; gap: .3rem; align-items: center; margin-top: .3rem; }
+    .banner { background: #fff4d6; border: 1px solid #e8c766; border-radius: 8px; padding: .6rem 1rem; }
+    .actions { display: flex; gap: .6rem; align-items: center; margin: 1.2rem 0; }
+    button { font: inherit; padding: .45rem 1rem; border-radius: 6px; border: 1px solid var(--accent); background: #fff; color: var(--accent); cursor: pointer; }
+    button.primary { background: var(--accent); color: #fff; }
+    #status.ok { color: var(--ok); }
+    #status.error { color: var(--error); }
+  </style>
+</head>
+<body>
+  <h1><img src="../icons/icon-48.png" alt="">PDF Secret Scanner – settings</h1>
+
+  <p id="not-configured" class="banner" hidden>Not set up yet: enter your APP-ID and save. Until then no PDF is checked.</p>
+
+  <form id="form" novalidate>
+    <section>
+      <h2>Prompt Security API</h2>
+      <div class="field">
+        <label for="appId">APP-ID</label>
+        <input id="appId" name="appId" type="password" autocomplete="off" spellcheck="false">
+        <label class="inline"><input id="showAppId" type="checkbox"> Show</label>
+        <p class="help">Stored unencrypted in your Chrome profile. Never share it or commit it.</p>
+        <p class="error" id="error-appId" hidden></p>
+      </div>
+      <div class="field">
+        <label for="apiUrl">API URL</label>
+        <input id="apiUrl" name="apiUrl" type="text" spellcheck="false">
+        <p class="help">The full text of every PDF you add to an allowed site is sent here.</p>
+        <p class="error" id="error-apiUrl" hidden></p>
+      </div>
+    </section>
+
+    <details id="advanced">
+      <summary>Advanced settings</summary>
+      <div id="numeric-fields"></div>
+    </details>
+
+    <div class="actions">
+      <button type="submit" class="primary">Save</button>
+      <button type="button" id="restore">Restore defaults</button>
+      <span id="status" role="status"></span>
+    </div>
+  </form>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>

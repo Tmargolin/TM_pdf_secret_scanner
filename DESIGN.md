@@ -722,7 +722,7 @@ TM_Chrome_ext/                     ← Git repository root (GitHub remote: origi
 │  │                notifications.ts
 │  ├─ offscreen/    offscreen.html, offscreen.ts, settings-client.ts, batch-receiver.ts, results.ts
 │  ├─ scanner/      extract.ts, chunker.ts, api-client.ts, parse.ts, aggregate.ts, mask.ts
-│  ├─ options/      options.html, options.ts
+│  ├─ options/      options.html, options.ts, form.ts
 │  └─ shared/       settings.ts, messages.ts, types.ts, safe-logger.ts, scan-port.ts
 ├─ tests/
 │  ├─ fixtures/     api-*.json, sample PDFs

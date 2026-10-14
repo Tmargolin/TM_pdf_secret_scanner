@@ -30,6 +30,7 @@ await esbuild.build({
   entryPoints: {
     'background/service-worker': 'src/background/service-worker.ts',
     'offscreen/offscreen': 'src/offscreen/offscreen.ts',
+    'options/options': 'src/options/options.ts',
   },
   format: 'esm',
 });
@@ -44,6 +45,7 @@ await esbuild.build({
 await cp('_locales', `${outdir}/_locales`, { recursive: true });
 await cp('icons', `${outdir}/icons`, { recursive: true });
 await cp('src/offscreen/offscreen.html', `${outdir}/offscreen/offscreen.html`);
+await cp('src/options/options.html', `${outdir}/options/options.html`);
 
 const manifest = createManifest(template, { mode, version: pkg.version });
 await writeFile(`${outdir}/manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
