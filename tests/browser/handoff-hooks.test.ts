@@ -3,7 +3,7 @@
 // or into other tests. Everything a "site" does is done with the iframe's own
 // constructors (win.File, win.DataTransfer…), as page code would.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { installHooks } from '../../src/main-world/handoff-hooks.ts';
+import { forwardOnce, installHooks } from '../../src/main-world/handoff-hooks.ts';
 
 type FrameWindow = Window & typeof globalThis;
 
@@ -458,5 +458,57 @@ describe('defensive paths – odd pages and odd objects never break anything', (
     const dir = pass(new Dir()) as unknown as Dir;
     const value = await new Promise((resolve) => dir.createReader().readEntries(resolve));
     expect(value).toBe('not a list');
+  });
+});
+
+describe('de-duplication – each File object forwarded once', () => {
+  it('repeated reads of input.files (as React and validation code do): once', () => {
+    const file = pdf('react');
+    const input = fileInput([file]);
+    install();
+    for (let read = 0; read < 5; read++) void input.files;
+    expect(forwarded).toEqual([file]);
+  });
+
+  it('the same file through two hooks (dataTransfer.files and items[0].getAsFile()): once', () => {
+    const file = pdf('both');
+    const transfer = listOf(file);
+    install();
+    void transfer.files;
+    void transfer.items[0]?.getAsFile();
+    expect(forwarded).toEqual([file]);
+  });
+
+  it('choosing the same file again (a new File object, same name and content): forwarded again', () => {
+    const first = pdf('again');
+    const second = pdf('again');
+    const input = fileInput([first]);
+    install();
+    void input.files;
+    input.files = listOf(second).files;
+    void input.files;
+    expect(forwarded).toEqual([first, second]);
+  });
+
+  it('several new files next to an already forwarded one: only the new ones', () => {
+    const old = pdf('old');
+    const fresh = pdf('fresh');
+    const input = fileInput([old]);
+    install();
+    void input.files;
+    input.files = listOf(old, fresh).files;
+    void input.files;
+    expect(forwarded).toEqual([old, fresh]);
+  });
+
+  it('forwardOnce: each wrapper has its own memory', () => {
+    const calls: File[] = [];
+    const file = pdf('shared');
+    const a = forwardOnce((f) => void calls.push(f));
+    const b = forwardOnce((f) => void calls.push(f));
+    a(file);
+    a(file);
+    b(file);
+    expect(calls).toEqual([file, file]);
   });
 });
