@@ -31,6 +31,13 @@ export const DOCUMENT_OPTIONS = {
   verbosity: 0,
 } as const;
 
+export interface ExtractOptions {
+  /** The shared pdf.js worker; without it pdf.js creates one per document. */
+  worker?: PDFWorker;
+  /** Aborting stops the work: the document is destroyed and the call fails. */
+  signal?: AbortSignal;
+}
+
 export interface ExtractedText {
   /** Text of each page; index 0 = page 1. */
   pages: string[];
@@ -52,20 +59,22 @@ export function joinTextItems(items: readonly object[]): string {
 
 /**
  * Extracts the text of every page. The document is always destroyed at the
- * end – also on errors – so its memory is released at once.
+ * end – also on errors or abort – so its memory is released at once.
  * Note: pdf.js takes ownership of `bytes` (they move to the worker).
  * pdf.js errors are passed on; extractPages() classifies them.
  */
-export async function extractText(
-  pdfjs: PdfJs,
-  bytes: Uint8Array,
-  options: { worker?: PDFWorker } = {},
-): Promise<ExtractedText> {
+export async function extractText(pdfjs: PdfJs, bytes: Uint8Array, options: ExtractOptions = {}): Promise<ExtractedText> {
+  const { signal } = options;
+  signal?.throwIfAborted();
   const task = pdfjs.getDocument({ data: bytes, ...DOCUMENT_OPTIONS, ...(options.worker ? { worker: options.worker } : {}) });
+  // Destroying the task makes the pending pdf.js call fail at once.
+  const onAbort = () => void task.destroy().catch(() => {});
+  signal?.addEventListener('abort', onAbort, { once: true });
   try {
     const document = await task.promise;
     const pages: string[] = [];
     for (let number = 1; number <= document.numPages; number++) {
+      signal?.throwIfAborted();
       const page = await document.getPage(number);
       const content = await page.getTextContent();
       pages.push(joinTextItems(content.items));
@@ -73,6 +82,7 @@ export async function extractText(
     }
     return { pages };
   } finally {
+    signal?.removeEventListener('abort', onAbort);
     await task.destroy();
   }
 }
@@ -101,12 +111,12 @@ export function hasTextLayer(pages: readonly string[]): boolean {
   return pages.some((page) => page.trim() !== '');
 }
 
-/** extractText, with every failure turned into one of our codes. Never throws. */
-export async function extractPages(
-  pdfjs: PdfJs,
-  bytes: Uint8Array,
-  options: { worker?: PDFWorker } = {},
-): Promise<ExtractionOutcome> {
+/**
+ * extractText, with every failure turned into one of our codes. Never throws.
+ * After an abort the outcome is PDF_INVALID – the caller has already given up
+ * on it (the job timed out).
+ */
+export async function extractPages(pdfjs: PdfJs, bytes: Uint8Array, options: ExtractOptions = {}): Promise<ExtractionOutcome> {
   let pages: string[];
   try {
     ({ pages } = await extractText(pdfjs, bytes, options));

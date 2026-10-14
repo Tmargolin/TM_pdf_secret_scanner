@@ -8,7 +8,7 @@ Design: `DESIGN.md` §4, §4.2, §5
 ## Modules
 | Module | In → Out |
 |---|---|
-| `extract.ts` | PDF bytes → text per page (`extractText`, throws; `extractPages`, never throws → `{ ok, pages }` or `{ ok: false, code }`); `DOCUMENT_OPTIONS` (`isEvalSupported: false`, no fonts, no XFA, no canvas); document always destroyed. `PasswordException` → `PDF_ENCRYPTED`; any other error → `PDF_INVALID`; only whitespace → `NO_TEXT_LAYER`; owner-password-only files open and are scanned |
+| `extract.ts` | PDF bytes → text per page (`extractText`, throws; `extractPages`, never throws → `{ ok, pages }` or `{ ok: false, code }`); `DOCUMENT_OPTIONS` (`isEvalSupported: false`, no fonts, no XFA, no canvas); document always destroyed; optional `worker` (shared) and `signal` (abort destroys the document). `PasswordException` → `PDF_ENCRYPTED`; any other error → `PDF_INVALID`; only whitespace → `NO_TEXT_LAYER`; owner-password-only files open and are scanned |
 | `chunker.ts` | page texts → chunks with page map; truncation at `maxTextChars` |
 | `api-client.ts` | chunk → API response; timeout, retries, global limiter (round-robin), bounded splitting |
 | `parse.ts` | API JSON → findings (`result.prompt.findings.Secrets`) |

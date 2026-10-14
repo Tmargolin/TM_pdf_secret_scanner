@@ -3,7 +3,10 @@
 Purpose: owns every scan – jobs, limits, extraction, scanning, results.
 Files: `src/offscreen/offscreen.html`, `offscreen.ts` (wiring), `jobs.ts`
 (`createJobRegistry`: admission, queue cap, FIFO start by size, timeout,
-isolation), `results.ts` (`toShowResult`, `placeholderOutcome`), `batch-receiver.ts` (scan port: collect batch, `BATCH_ACCEPTED`,
+isolation), `extractor.ts` (`createExtractor`: `maxParallelExtractions`, one
+shared pdf.js worker), `limiter.ts` (`createLimiter`: FIFO concurrency
+limit, abortable wait), `results.ts` (`toShowResult`, `extractionOutcome`,
+`placeholderOutcome`), `batch-receiver.ts` (scan port: collect batch, `BATCH_ACCEPTED`,
 `runBatch`, `BATCH_DONE`, close), `settings-client.ts` (settings cache); uses
 `src/scanner/*`
 Design: `DESIGN.md` §2, §4, §4.1
@@ -41,7 +44,14 @@ states `queued → running → done | failed`. `submitBatch(batch)` → one
   aborted; the work must stop.
 - Exception in a job → `SCAN_INTERRUPTED` for that job only (D38).
 - Bytes released when the job starts work / ends.
-- `maxParallelExtractions`, one shared pdf.js worker: 5.4.
+- Work per job: `extractor.extract(bytes, signal)` → PDF error code, or
+  (until step 6) `placeholderOutcome`; the text is dropped.
+- `maxParallelExtractions` PDFs parsed at once (`limiter.ts`, FIFO, read at
+  every start); a job that times out while waiting leaves the queue, one that
+  times out while parsing has its pdf.js document destroyed.
+- One shared `PDFWorker` (`verbosity` 0), created on first use, re-created
+  only if destroyed; `GlobalWorkerOptions.workerSrc` =
+  `chrome.runtime.getURL('offscreen/pdf.worker.mjs')`.
 
 ## Rules
 - Only `chrome.runtime` is available here (no `chrome.storage`, no notifications).

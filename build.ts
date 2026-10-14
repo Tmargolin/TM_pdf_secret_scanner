@@ -49,6 +49,8 @@ await esbuild.build({
 await cp('_locales', `${outdir}/_locales`, { recursive: true });
 await cp('icons', `${outdir}/icons`, { recursive: true });
 await cp('src/offscreen/offscreen.html', `${outdir}/offscreen/offscreen.html`);
+// pdf.js worker (legacy build, D37), loaded by the offscreen document as a module worker.
+await cp('node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs', `${outdir}/offscreen/pdf.worker.mjs`);
 await cp('src/options/options.html', `${outdir}/options/options.html`);
 
 const manifest = createManifest(template, { mode, version: pkg.version });

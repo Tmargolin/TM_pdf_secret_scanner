@@ -4,6 +4,15 @@ import { createLogger } from '../../src/shared/safe-logger.ts';
 import { createChromeFake, FAKE_EXTENSION_ID, flushAsync, type ChromeFake } from '../helpers/chrome-fake.ts';
 import { createPortPair } from '../helpers/port-pair.ts';
 
+// The page points pdf.js at its worker file inside the extension. In Node
+// pdf.js must keep its own worker set-up, so the page gets a stand-in
+// GlobalWorkerOptions; getDocument and PDFWorker stay real.
+const workerOptions = vi.hoisted(() => ({ workerSrc: '' }));
+vi.mock('pdfjs-dist/legacy/build/pdf.mjs', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  GlobalWorkerOptions: workerOptions,
+}));
+
 let fake: ChromeFake;
 
 const isReady = (m: unknown) => typeof m === 'object' && m !== null && (m as { type?: unknown }).type === 'OFFSCREEN_READY';
@@ -134,9 +143,9 @@ describe('scan port (content script → offscreen document, direct)', () => {
           scanId: '5f1c2a3e-1111-4222-8333-944455556666',
           batchId: BATCH_ID,
           fileName: 'a.pdf',
-          status: 'clean',
+          status: 'error', // "abc" is not a PDF
           findings: [],
-          errors: [],
+          errors: [{ code: 'PDF_INVALID' }],
         },
       ],
     });
@@ -165,8 +174,7 @@ describe('scan port (content script → offscreen document, direct)', () => {
     expect(console.info).not.toHaveBeenCalledWith('[PSS:offscreen] batch received', expect.anything());
 
     deliver({ type: 'SETTINGS_UPDATED', settings: {} }, { id: FAKE_EXTENSION_ID });
-    await flushAsync();
-    expect(outcome).toBe('done');
+    await vi.waitFor(() => expect(outcome).toBe('done'), { timeout: 4_000 }); // pdf.js runs now
     expect(console.info).toHaveBeenCalledWith('[PSS:offscreen] batch received', { files: 1 });
   });
 });
