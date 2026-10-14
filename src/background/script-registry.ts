@@ -7,7 +7,7 @@
 // calling it once, so every trigger can simply call it.
 
 import type { Logger } from '../shared/safe-logger.ts';
-import { loadSettings, type SettingsStorage } from '../shared/settings.ts';
+import { loadSettings, STORAGE_KEY, type SettingsStorage } from '../shared/settings.ts';
 
 type ContentScript = chrome.scripting.RegisteredContentScript;
 
@@ -29,6 +29,18 @@ export function scriptsFor(matches: string[]): ContentScript[] {
       persistAcrossSessions: true,
     },
   ];
+}
+
+/**
+ * True if a chrome.storage.onChanged event changed the allow list. Saving other
+ * settings (APP-ID, chunk size…) does not need a reconcile.
+ */
+export function allowListChanged(changes: Record<string, { oldValue?: unknown; newValue?: unknown }>, areaName: string): boolean {
+  if (areaName !== 'local' || !(STORAGE_KEY in changes)) return false;
+  const sites = (value: unknown) =>
+    JSON.stringify(typeof value === 'object' && value !== null ? (value as { allowedSites?: unknown }).allowedSites : undefined);
+  const change = changes[STORAGE_KEY];
+  return sites(change?.oldValue) !== sites(change?.newValue);
 }
 
 /** The Chrome calls the registry needs – injected so tests can replace them. */
