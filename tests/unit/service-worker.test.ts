@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getDefaultSettings } from '../../src/shared/settings.ts';
-import { createChromeFake, FAKE_EXTENSION_ID, flushAsync, type ChromeFake } from '../helpers/chrome-fake.ts';
+import { createChromeFake, FAKE_EXTENSION_ID, flushAsync, INSTALLED, type ChromeFake } from '../helpers/chrome-fake.ts';
 
 const CONTENT_SCRIPT = { id: FAKE_EXTENSION_ID, tab: { id: 7 } };
 const OFFSCREEN_URL = `chrome-extension://${FAKE_EXTENSION_ID}/offscreen/offscreen.html`;
@@ -53,7 +53,7 @@ describe('service worker start-up', () => {
 
   it('keeps exactly one document when install and startup events follow', async () => {
     await startServiceWorker();
-    fake.onInstalled.dispatch();
+    fake.onInstalled.dispatch(INSTALLED.update);
     fake.onStartup.dispatch();
     await flushAsync();
     expect(fake.offscreenDocuments).toHaveLength(1);
@@ -80,14 +80,14 @@ describe('content-script registration', () => {
     fake.grantedOrigins.push('http://localhost/*');
     await startServiceWorker();
     expect(fake.registeredScripts).toEqual([]); // not at every start-up
-    fake.onInstalled.dispatch();
+    fake.onInstalled.dispatch(INSTALLED.update);
     await flushAsync();
     expect(fake.registeredScripts.map((s) => s.matches)).toEqual([['http://localhost/*']]);
   });
 
   it('registers nothing on install when no allow-listed site is granted', async () => {
     await startServiceWorker();
-    fake.onInstalled.dispatch();
+    fake.onInstalled.dispatch(INSTALLED.update);
     await flushAsync();
     expect(fake.registeredScripts).toEqual([]);
   });
@@ -95,7 +95,7 @@ describe('content-script registration', () => {
   it('still keeps the offscreen document on install', async () => {
     await startServiceWorker();
     fake.offscreenDocuments.length = 0;
-    fake.onInstalled.dispatch();
+    fake.onInstalled.dispatch(INSTALLED.update);
     await flushAsync();
     expect(fake.offscreenDocuments).toHaveLength(1);
   });
@@ -180,7 +180,7 @@ describe('reconcile triggers (step 3)', () => {
   it('revoking the last site unregisters the script', async () => {
     fake.grantedOrigins.push(LOCALHOST);
     await startServiceWorker();
-    fake.onInstalled.dispatch();
+    fake.onInstalled.dispatch(INSTALLED.update);
     await settle();
     fake.grantedOrigins.length = 0;
     fake.onPermissionsRemoved.dispatch({ origins: [LOCALHOST] });
@@ -192,7 +192,7 @@ describe('reconcile triggers (step 3)', () => {
     fake.grantedOrigins.push(LOCALHOST);
     fake.storageData['settings'] = getDefaultSettings(true); // settings saved before (not a first save)
     await startServiceWorker();
-    fake.onInstalled.dispatch();
+    fake.onInstalled.dispatch(INSTALLED.update);
     await settle();
     const before = fake.scriptingCalls.length;
     await fake.chrome.storage.local.set({ settings: { ...getDefaultSettings(true), appId: 'new-id' } });

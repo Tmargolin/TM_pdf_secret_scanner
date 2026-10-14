@@ -33,6 +33,12 @@ export function createFakeEvent<L extends Listener>(): FakeEvent<L> {
 
 export const FAKE_EXTENSION_ID = 'abcdefghijklmnopabcdefghijklmnop';
 
+/** runtime.onInstalled details for the cases tests need. */
+export const INSTALLED = {
+  install: { reason: 'install' },
+  update: { reason: 'update', previousVersion: '0.1.0' },
+} as const satisfies Record<string, chrome.runtime.InstalledDetails>;
+
 type MessageListener = (
   message: unknown,
   sender: chrome.runtime.MessageSender,
@@ -55,7 +61,9 @@ export interface ChromeFake {
   readonly createDocumentCalls: chrome.offscreen.CreateParameters[];
   /** When set, the next createDocument call fails with this error. */
   failNextCreate: Error | null;
-  readonly onInstalled: FakeEvent<() => void>;
+  readonly onInstalled: FakeEvent<(details: chrome.runtime.InstalledDetails) => void>;
+  /** How many times chrome.runtime.openOptionsPage was called. */
+  readonly optionsPageOpened: number;
   readonly onStartup: FakeEvent<() => void>;
   readonly onMessage: FakeEvent<MessageListener>;
   readonly onConnect: FakeEvent<(port: chrome.runtime.Port) => void>;
@@ -94,7 +102,8 @@ export function createChromeFake(): ChromeFake {
   const offscreenDocuments: string[] = [];
   const getContextsCalls: ContextFilter[] = [];
   const createDocumentCalls: chrome.offscreen.CreateParameters[] = [];
-  const onInstalled = createFakeEvent<() => void>();
+  const onInstalled = createFakeEvent<(details: chrome.runtime.InstalledDetails) => void>();
+  let optionsPageOpened = 0;
   const onStartup = createFakeEvent<() => void>();
   const onMessage = createFakeEvent<MessageListener>();
   const onConnect = createFakeEvent<(port: chrome.runtime.Port) => void>();
@@ -118,6 +127,9 @@ export function createChromeFake(): ChromeFake {
     createDocumentCalls,
     failNextCreate: null,
     onInstalled,
+    get optionsPageOpened() {
+      return optionsPageOpened;
+    },
     onStartup,
     onMessage,
     onConnect,
@@ -152,6 +164,9 @@ export function createChromeFake(): ChromeFake {
     onStartup,
     onMessage,
     onConnect,
+    async openOptionsPage() {
+      optionsPageOpened++;
+    },
     async sendMessage(message: unknown) {
       sentMessages.push(message);
       if (fake.sendMessageHandler) return fake.sendMessageHandler(message);

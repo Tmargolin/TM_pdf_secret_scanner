@@ -40,9 +40,14 @@ const reconcileScripts = (): void => {
   void scripts.reconcile();
 };
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   keepOffscreenAlive();
   reconcileScripts(); // install, update, reload
+  // First install only (not updates or reloads): the user must enter the
+  // APP-ID and add sites before anything is scanned.
+  if (details.reason === 'install') {
+    chrome.runtime.openOptionsPage().catch((error: unknown) => log.warn('options page could not be opened', { error }));
+  }
 });
 chrome.runtime.onStartup.addListener(() => {
   keepOffscreenAlive();
