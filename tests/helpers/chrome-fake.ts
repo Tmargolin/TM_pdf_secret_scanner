@@ -56,6 +56,7 @@ export interface ChromeFake {
   readonly onInstalled: FakeEvent<() => void>;
   readonly onStartup: FakeEvent<() => void>;
   readonly onMessage: FakeEvent<MessageListener>;
+  readonly onConnect: FakeEvent<(port: chrome.runtime.Port) => void>;
   /** Contents of chrome.storage.local. */
   readonly storageData: Record<string, unknown>;
   readonly onStorageChanged: FakeEvent<StorageChangeListener>;
@@ -85,6 +86,7 @@ export function createChromeFake(): ChromeFake {
   const onInstalled = createFakeEvent<() => void>();
   const onStartup = createFakeEvent<() => void>();
   const onMessage = createFakeEvent<MessageListener>();
+  const onConnect = createFakeEvent<(port: chrome.runtime.Port) => void>();
   const onStorageChanged = createFakeEvent<StorageChangeListener>();
   const storageData: Record<string, unknown> = {};
   const sentMessages: unknown[] = [];
@@ -103,6 +105,7 @@ export function createChromeFake(): ChromeFake {
     onInstalled,
     onStartup,
     onMessage,
+    onConnect,
     storageData,
     onStorageChanged,
     sentMessages,
@@ -128,6 +131,7 @@ export function createChromeFake(): ChromeFake {
     onInstalled,
     onStartup,
     onMessage,
+    onConnect,
     async sendMessage(message: unknown) {
       sentMessages.push(message);
       if (fake.sendMessageHandler) return fake.sendMessageHandler(message);

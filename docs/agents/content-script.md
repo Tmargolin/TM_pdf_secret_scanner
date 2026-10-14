@@ -2,7 +2,8 @@
 
 Purpose: turn forwarded files into scan batches and send them to the offscreen
 document. No UI.
-Files: `src/content/index.ts` (entry, built to `content/content.js`, classic script), `bridge.ts` (MessageChannel), `batcher.ts`
+Files: `src/content/index.ts` (entry, built to `content/content.js`, classic script), `encode.ts` (File → `SCAN_REQUEST`, base64), `scan-sender.ts` (port, replies, retry, `SCAN_INTERRUPTED`), `bridge.ts` (MessageChannel), `batcher.ts`
+Step 2 only: `index.ts` sends files from `<input type=file>` `change` events (capture phase); replaced by the hooks in step 4.
 Design: `DESIGN.md` §3, §2 (message flows)
 
 ## Input

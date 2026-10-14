@@ -1,13 +1,18 @@
 # Offscreen document
 
 Purpose: owns every scan – jobs, limits, extraction, scanning, results.
-Files: `src/offscreen/offscreen.html`, `offscreen.ts` (wiring, ports, job
-registry, limits), `settings-client.ts` (settings cache); uses `src/scanner/*`
+Files: `src/offscreen/offscreen.html`, `offscreen.ts` (wiring, job registry,
+limits), `batch-receiver.ts` (scan port: collect batch, `BATCH_ACCEPTED`,
+`runBatch`, `BATCH_DONE`, close), `settings-client.ts` (settings cache); uses
+`src/scanner/*`
 Design: `DESIGN.md` §2, §4, §4.1
 
 ## Inputs
-- Ports named `scan-batch` from content scripts only (`sender.tab` set) →
-  `SCAN_REQUEST`.
+- Ports named `scan-batch` from content scripts only (`isFromContentScript`,
+  origin from `port.sender`) → `SCAN_REQUEST`… `BATCH_END`. Invalid message,
+  mixed batch ids, duplicate scan id, > 100 files or a count mismatch → port
+  closed, batch dropped. Page closes before `BATCH_END` → batch dropped; after
+  it → batch keeps running.
 - Settings (`settings-client.ts`): sends `OFFSCREEN_READY` on load, retries
   after 0.5 / 2 / 5 s; accepts `SETTINGS_UPDATED` only from our own non-tab
   contexts (`isFromExtensionContext`). Jobs wait on `ready()`; APP-ID is
