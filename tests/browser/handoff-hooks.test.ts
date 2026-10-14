@@ -75,9 +75,8 @@ describe('file inputs – every place an input can live', () => {
 
   it('detached (never added to the page)', () => {
     const file = pdf('detached');
+    const input = fileInput([file]); // built before install: only the input read is observed
     install();
-    const input = fileInput([file]);
-    forwarded.length = 0;
     void input.files;
     expect(forwarded).toEqual([file]);
   });
@@ -87,19 +86,17 @@ describe('file inputs – every place an input can live', () => {
     const host = doc.createElement('div');
     doc.body.append(host);
     const root = host.attachShadow({ mode });
-    install();
     const input = fileInput([file]);
     root.append(input);
-    forwarded.length = 0;
+    install();
     void input.files;
     expect(forwarded).toEqual([file]);
   });
 
   it('several files: all forwarded, in order', () => {
     const files = [pdf('one'), pdf('two'), pdf('three')];
-    install();
     const input = fileInput(files);
-    forwarded.length = 0;
+    install();
     void input.files;
     expect(forwarded).toEqual(files);
   });

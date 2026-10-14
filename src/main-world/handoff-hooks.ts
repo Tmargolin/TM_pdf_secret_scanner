@@ -24,6 +24,23 @@ export type ForwardFile = (file: File) => void;
 export type HookWindow = Pick<typeof globalThis, 'HTMLInputElement' | 'DataTransfer' | 'DataTransferItem' | 'FileList' | 'File'> &
   Partial<Pick<typeof globalThis, 'FileSystemFileHandle'>>;
 
+/**
+ * Forwards each File object once. Pages read `.files` many times for one
+ * selection (React renders, validation…) and the same File can also come
+ * through two hooks (DataTransfer.files and getAsFile); each read returns the
+ * same File object, so remembering the objects is enough. A WeakSet keeps no
+ * File alive. Choosing the same file again creates a new File object, so it
+ * is forwarded – and scanned – again.
+ */
+export function forwardOnce(forward: ForwardFile): ForwardFile {
+  const seen = new WeakSet<File>();
+  return (file) => {
+    if (seen.has(file)) return;
+    seen.add(file);
+    forward(file);
+  };
+}
+
 /** Forwards every File in a FileList (or nothing for null). */
 function forwardList(win: HookWindow, list: unknown, forward: ForwardFile): void {
   if (!(list instanceof win.FileList)) return;
@@ -182,9 +199,11 @@ function forwardIfFile(win: HookWindow, value: unknown, forward: ForwardFile): v
  *     objects' own prototypes are wrapped lazily (hookEntry, D36);
  *   FileSystemFileHandle.prototype.getFile – File System Access API
  *     (showOpenFilePicker, handles from drag & drop).
+ * Each File object is forwarded once (forwardOnce).
  * Returns the names of the APIs that were wrapped.
  */
-export function installHooks(win: HookWindow, forward: ForwardFile): string[] {
+export function installHooks(win: HookWindow, forwardEach: ForwardFile): string[] {
+  const forward = forwardOnce(forwardEach);
   const installed: string[] = [];
   const inspect = (value: unknown) => forwardList(win, value, forward);
   if (wrapGetter(win.HTMLInputElement.prototype, 'files', inspect)) installed.push('HTMLInputElement.files');

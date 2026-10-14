@@ -33,7 +33,9 @@ port arrives.
   passes a hook, before the page receives it (`wrapOnce`, `WeakMap`).
 - `FileSystemFileHandle` may be missing (secure contexts only) → skipped.
 - Call the original, return its result unchanged, never throw, never await.
-- Forward each `File` object once (`WeakSet`).
+- Forward each `File` object once (`forwardOnce`, a `WeakSet` per
+  `installHooks` call): repeated reads and the same File through two hooks
+  count once; choosing the file again (new File object) is forwarded again.
 - No `chrome.*` (not available), no byte reading, no parsing.
 - Injected by registration from the service worker (`docs/agents/service-worker.md`),
   `world: MAIN`, `runAt: document_start`, `allFrames`, `matchOriginAsFallback`.
