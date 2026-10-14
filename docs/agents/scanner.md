@@ -8,7 +8,7 @@ Design: `DESIGN.md` §4, §4.2, §5
 ## Modules
 | Module | In → Out |
 |---|---|
-| `extract.ts` | PDF bytes → text per page; errors `PDF_ENCRYPTED`, `PDF_INVALID`, `NO_TEXT_LAYER` |
+| `extract.ts` | PDF bytes → text per page (`extractText(pdfjs, bytes, { worker })`, `joinTextItems`); `DOCUMENT_OPTIONS` (`isEvalSupported: false`, no fonts, no XFA, no canvas); document always destroyed; errors `PDF_ENCRYPTED`, `PDF_INVALID`, `NO_TEXT_LAYER` (5.2) |
 | `chunker.ts` | page texts → chunks with page map; truncation at `maxTextChars` |
 | `api-client.ts` | chunk → API response; timeout, retries, global limiter (round-robin), bounded splitting |
 | `parse.ts` | API JSON → findings (`result.prompt.findings.Secrets`) |
@@ -16,6 +16,8 @@ Design: `DESIGN.md` §4, §4.2, §5
 | `mask.ts` | secret → first 4 + `…` + last 2; < 12 chars → `FULLY_MASKED` (`••••••`); output must pass `isMaskedValue` (`messages.ts`) |
 
 ## Rules
+- pdf.js: `pdfjs-dist/legacy/build/pdf.mjs` only (D37), passed in; never log or
+  store extracted text.
 - Chunk ends only at whitespace (blank line > line break > space); never inside
   a token or a PEM block.
 - Bounded splitting when a chunk is cut short (response

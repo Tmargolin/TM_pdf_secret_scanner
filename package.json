@@ -26,5 +26,8 @@
     "playwright": "^1.64.0",
     "typescript": "^7.0.2",
     "vitest": "^5.0.4"
+  },
+  "dependencies": {
+    "pdfjs-dist": "6.4.299"
   }
 }
