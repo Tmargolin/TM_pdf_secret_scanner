@@ -4,7 +4,9 @@ Design: `DESIGN.md` §8 (permissions), §9, §10, §15
 
 | Item | Path |
 |---|---|
-| Build (esbuild) | `build.mjs` → `dist/` (`build` release, `build:dev` dev) |
+| Build (esbuild) | `build.ts` (run by Node directly) → `dist/`; `npm run build` release, `npm run build:dev` dev |
+| Manifest generation | `scripts/manifest.ts` (`createManifest`; dev adds `http://localhost/*`) |
+| Dev flag in code | `__DEV__` (esbuild `define`; declared in `src/globals.d.ts`) |
 | Manifest | `manifest.json` (template; dev adds `http://localhost/*` + allow-list seed) |
 | Strings | `_locales/en/messages.json` |
 | CI | `.github/workflows/ci.yml` |

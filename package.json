@@ -1,6 +1,6 @@
 {
   "name": "tm-pdf-secret-scanner",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "Chrome extension that scans PDFs handed to allow-listed sites for secrets using the Prompt Security API.",
   "type": "module",
@@ -8,6 +8,8 @@
     "node": ">=24"
   },
   "scripts": {
+    "build": "node build.ts",
+    "build:dev": "node build.ts --dev",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"

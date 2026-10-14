@@ -653,7 +653,8 @@ TM_Chrome_ext/                     ← Git repository root (GitHub remote: origi
 ├─ manifest.json
 ├─ _locales/en/messages.json
 ├─ .github/        dependabot.yml, workflows/ci.yml
-├─ package.json, package-lock.json, tsconfig.json, build.mjs   (esbuild script)
+├─ package.json, package-lock.json, tsconfig.json, vitest.config.ts
+├─ build.ts                        esbuild build script (Node runs TypeScript directly)
 ├─ src/
 │  ├─ main-world/   handoff-hooks.ts            (wrapped APIs, WeakSet, channel)
 │  ├─ content/      bridge.ts, batcher.ts, index.ts
@@ -668,7 +669,7 @@ TM_Chrome_ext/                     ← Git repository root (GitHub remote: origi
 │  ├─ helpers/      chrome-fake.ts
 │  ├─ unit/         *.test.ts        (Node)
 │  └─ browser/      *.test.ts        (Vitest browser mode, Chromium)
-├─ scripts/        probe-api.mjs, make-fixtures.mjs, serve-test-pages.mjs, mock-api.mjs
+├─ scripts/        manifest.ts, probe-api.mjs, make-fixtures.mjs, serve-test-pages.mjs, mock-api.mjs
 ├─ docs/           manual-tests.md
 │  └─ agents/       one guide per component + protocol, testing, build (for AI agents)
 ├─ test-pages/      upload.html (input, detached input, shadow DOM, drop, paste,

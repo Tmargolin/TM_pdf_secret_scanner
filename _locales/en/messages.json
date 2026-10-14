@@ -1,0 +1,8 @@
+{
+  "extName": {
+    "message": "PDF Secret Scanner"
+  },
+  "extDescription": {
+    "message": "Warns you when a PDF you add to an allowed website contains secrets."
+  }
+}
