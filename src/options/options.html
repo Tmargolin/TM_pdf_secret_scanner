@@ -25,14 +25,33 @@
     .actions { display: flex; gap: .6rem; align-items: center; margin: 1.2rem 0; }
     button { font: inherit; padding: .45rem 1rem; border-radius: 6px; border: 1px solid var(--accent); background: #fff; color: var(--accent); cursor: pointer; }
     button.primary { background: var(--accent); color: #fff; }
-    #status.ok { color: var(--ok); }
-    #status.error { color: var(--error); }
+    #status.ok, #site-status.ok { color: var(--ok); }
+    #status.error, #site-status.error { color: var(--error); }
+    #sites { list-style: none; padding: 0; margin: 0 0 .8rem; }
+    #sites li { display: flex; justify-content: space-between; align-items: center; padding: .35rem 0; border-bottom: 1px solid var(--line); font-family: ui-monospace, monospace; }
+    #sites li.empty { font-family: inherit; color: var(--muted); }
+    #sites button { font-family: system-ui, sans-serif; padding: .2rem .7rem; }
+    .add-site { display: flex; gap: .5rem; }
+    .add-site input { flex: 1; }
   </style>
 </head>
 <body>
   <h1><img src="../icons/icon-48.png" alt="">PDF Secret Scanner – settings</h1>
 
   <p id="not-configured" class="banner" hidden>Not set up yet: enter your APP-ID and save. Until then no PDF is checked.</p>
+
+  <section aria-labelledby="sites-title">
+    <h2 id="sites-title">Sites to protect</h2>
+    <p class="help">PDFs are checked only on these sites. Chrome asks for access to each site when you add it.
+      Reload tabs already open on a site after adding it. Upload widgets embedded from another site
+      (frames) need that site added too.</p>
+    <ul id="sites"></ul>
+    <form id="add-site-form" class="add-site" novalidate>
+      <input id="site-input" type="text" placeholder="mail.google.com or *.slack.com" spellcheck="false" aria-label="Site to add">
+      <button type="submit" class="primary">Add site</button>
+    </form>
+    <p id="site-status" role="status"></p>
+  </section>
 
   <form id="form" novalidate>
     <section>

@@ -2,8 +2,10 @@
 // in form.ts; this file only moves values between it and the page.
 // Never logs or displays the APP-ID outside its own field.
 
+import { createLogger } from '../shared/safe-logger.ts';
 import { getDefaultSettings, isConfigured, loadSettings, type Settings } from '../shared/settings.ts';
 import { defaultFormValues, errorsByField, NUMERIC_FIELDS, saveForm, toFormValues, type FormValues } from './form.ts';
+import { addSite, chromePermissionsApi, removeSite, type SiteResult } from './sites.ts';
 
 const storage = chrome.storage.local;
 const dev = __DEV__;
@@ -88,10 +90,81 @@ function showConfigured(settings: Settings): void {
   byId('not-configured').hidden = isConfigured(settings);
 }
 
+// ---------- site allow list ----------
+
+const sitesDeps = { storage, permissions: chromePermissionsApi(), dev, log: createLogger('options', { dev }) };
+let shownSites: string[] = [];
+
+function setSiteStatus(text: string, kind: 'ok' | 'error' | ''): void {
+  const element = byId('site-status');
+  element.textContent = text;
+  element.className = kind;
+}
+
+function renderSites(sites: string[]): void {
+  shownSites = sites;
+  const list = byId<HTMLUListElement>('sites');
+  list.replaceChildren();
+  if (sites.length === 0) {
+    const empty = document.createElement('li');
+    empty.className = 'empty';
+    empty.textContent = 'No sites yet – nothing is checked.';
+    list.append(empty);
+    return;
+  }
+  for (const site of sites) {
+    const item = document.createElement('li');
+    const name = document.createElement('span');
+    name.textContent = site;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.textContent = 'Remove';
+    remove.setAttribute('aria-label', `Remove ${site}`);
+    remove.addEventListener('click', () => {
+      void removeSite(site, sitesDeps).then(
+        (result) => showSiteResult(result, `Removed ${site}.`),
+        () => setSiteStatus('The site list could not be saved.', 'error'),
+      );
+    });
+    item.append(name, remove);
+    list.append(item);
+  }
+}
+
+function showSiteResult(result: SiteResult, okText: string): void {
+  if (result.ok) {
+    renderSites(result.sites);
+    setSiteStatus(okText, 'ok');
+  } else {
+    setSiteStatus(result.error, 'error');
+  }
+}
+
+byId<HTMLFormElement>('add-site-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const field = byId<HTMLInputElement>('site-input');
+  // addSite asks Chrome for permission before its first await: still inside this click.
+  void addSite(field.value, shownSites, sitesDeps).then(
+    (result) => {
+      showSiteResult(result, result.ok ? `Added ${result.pattern}. Reload tabs already open on it.` : '');
+      if (result.ok) field.value = '';
+    },
+    () => setSiteStatus('The site list could not be saved.', 'error'),
+  );
+});
+
+// The list can also change elsewhere (another options tab): keep it current.
+chrome.storage.onChanged.addListener((_changes, areaName) => {
+  if (areaName === 'local') void loadSettings(storage, dev).then((settings) => renderSites(settings.allowedSites));
+});
+
+// ---------- load ----------
+
 async function load(): Promise<void> {
   const settings = await loadSettings(storage, dev);
   fillForm(toFormValues(settings));
   showConfigured(settings);
+  renderSites(settings.allowedSites);
 }
 
 form.addEventListener('submit', (event) => {

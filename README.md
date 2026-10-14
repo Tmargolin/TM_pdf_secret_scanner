@@ -48,6 +48,16 @@ npx playwright install chromium   # browser for the test suite
 *Completed in step 3 (options page):* APP-ID, API URL, site allow list and all
 settings with their defaults.
 
+**Known Chrome behaviour – removing a site:** when you remove a site from the
+list, the extension gives Chrome's access to that site back
+(`chrome.permissions.remove`) and Chrome confirms it – but the site may still
+appear under `chrome://extensions` → Details → *Site access*, and adding the
+same site again later may not show Chrome's permission prompt. This is how
+Chrome keeps track of sites you once approved; it is not controlled by the
+extension. Scanning stops either way: PDFs are only checked on sites that are
+on the extension's list **and** granted. To clear the entry, remove the site
+in Chrome's *Site access* list yourself.
+
 ## Testing
 
 | Command | What it runs |
