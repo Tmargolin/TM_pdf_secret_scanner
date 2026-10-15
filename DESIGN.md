@@ -417,14 +417,21 @@ characters were checked".
 2. a line break
 3. any whitespace
 
+The best kind found in the **second half** of the allowed window wins (a
+better break further back is not worth a chunk half as long); with no break
+there, the last break anywhere in the window is used.
+
 Never inside a run of non-whitespace characters (a token, i.e. where a secret
 would be), and **never inside a PEM block** (`-----BEGIN …-----` …
 `-----END …-----`, found by regex before chunking and treated as unbreakable).
-Only an unbroken span longer than `chunkSize` (e.g. a huge base64 blob or an
-oversized PEM block) is cut by force, at `chunkSize`.
+A PEM block larger than the window is broken at whitespace inside it. Only an
+unbroken span longer than `chunkSize` (e.g. a huge base64 blob) is cut by
+force, at `chunkSize`.
 
 **Overlap:** each chunk starts `chunkOverlap` (200) characters before the
-previous chunk's end, snapped to a whitespace boundary. Its purpose is
+previous chunk's end, snapped forward to a whitespace boundary and out of any
+PEM block, and never more than half of the previous chunk (so chunking always
+advances). Its purpose is
 **context** – keeping a label ("password:") with its value on the next line –
 not covering long secrets, which are never split by rule above.
 
