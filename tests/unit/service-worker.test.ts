@@ -233,6 +233,66 @@ describe('reconcile triggers (step 3)', () => {
   });
 });
 
+describe('lazy offscreen document (D41)', () => {
+  it('no document after the service worker starts', async () => {
+    await startServiceWorker();
+    expect(fake.offscreenDocuments).toHaveLength(0);
+    expect(fake.createDocumentCalls).toHaveLength(0);
+  });
+
+  it.each([
+    ['first install', () => fake.onInstalled.dispatch(INSTALLED.install)],
+    ['an update or reload', () => fake.onInstalled.dispatch(INSTALLED.update)],
+    ['browser start', () => fake.onStartup.dispatch()],
+    ['a notification click', () => fake.onNotificationClicked.dispatch('not-configured')],
+    ['a settings change', () => void fake.chrome.storage.local.set({ settings: getDefaultSettings(true) })],
+  ])('no document after %s', async (_name, trigger) => {
+    await startServiceWorker();
+    trigger();
+    await flushAsync();
+    expect(fake.createDocumentCalls).toHaveLength(0);
+  });
+
+  it('the first ENSURE_OFFSCREEN creates exactly one document', async () => {
+    await startServiceWorker();
+    const { sendResponse } = await send({ type: 'ENSURE_OFFSCREEN' }, CONTENT_SCRIPT);
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true });
+    expect(fake.offscreenDocuments).toEqual([OFFSCREEN_URL]);
+    expect(fake.createDocumentCalls).toHaveLength(1);
+  });
+
+  it('two tabs asking at the same time share one creation', async () => {
+    await startServiceWorker();
+    const first = vi.fn();
+    const second = vi.fn();
+    const otherTab = { id: FAKE_EXTENSION_ID, tab: { id: 8 } };
+    fake.onMessage.dispatch({ type: 'ENSURE_OFFSCREEN' }, CONTENT_SCRIPT as object as chrome.runtime.MessageSender, first);
+    fake.onMessage.dispatch({ type: 'ENSURE_OFFSCREEN' }, otherTab as object as chrome.runtime.MessageSender, second);
+    await flushAsync();
+    expect(first).toHaveBeenCalledWith({ ok: true });
+    expect(second).toHaveBeenCalledWith({ ok: true });
+    expect(fake.createDocumentCalls).toHaveLength(1);
+  });
+
+  it('a later ENSURE_OFFSCREEN with the document present creates nothing', async () => {
+    await startServiceWorker();
+    await send({ type: 'ENSURE_OFFSCREEN' }, CONTENT_SCRIPT);
+    const { sendResponse } = await send({ type: 'ENSURE_OFFSCREEN' }, CONTENT_SCRIPT);
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true });
+    expect(fake.createDocumentCalls).toHaveLength(1);
+  });
+
+  it('a failed creation is retried by the next ENSURE_OFFSCREEN', async () => {
+    await startServiceWorker();
+    fake.failNextCreate = new Error('boom');
+    const failed = await send({ type: 'ENSURE_OFFSCREEN' }, CONTENT_SCRIPT);
+    expect(failed.sendResponse).toHaveBeenCalledWith({ ok: false });
+    const retried = await send({ type: 'ENSURE_OFFSCREEN' }, CONTENT_SCRIPT);
+    expect(retried.sendResponse).toHaveBeenCalledWith({ ok: true });
+    expect(fake.offscreenDocuments).toHaveLength(1);
+  });
+});
+
 describe('ENSURE_OFFSCREEN', () => {
   it('re-creates a missing document for a content script and replies ok', async () => {
     await startServiceWorker();
