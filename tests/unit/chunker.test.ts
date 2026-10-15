@@ -12,6 +12,7 @@ import {
   pagesInRange,
   REQUEST_OVERHEAD_BYTES,
   requestBodyBytes,
+  truncateText,
   type Chunk,
   type ChunkOptions,
 } from '../../src/scanner/chunker.ts';
@@ -246,6 +247,39 @@ describe('chunkText – sizes in code points and request bytes', () => {
   it('whitespace-only stretches between text are not sent', () => {
     const chunks = chunkText(`alpha${' '.repeat(2000)}omega`, opts(500));
     expect(chunks.map((c) => c.text.trim())).toEqual(['alpha', 'omega']);
+  });
+});
+
+describe('truncateText (maxTextChars)', () => {
+  it('a text within the limit is kept whole', () => {
+    expect(truncateText('abc', 3)).toEqual({ text: 'abc', textChars: 3, scannedChars: 3, truncated: false });
+    expect(truncateText('abc', 10)).toEqual({ text: 'abc', textChars: 3, scannedChars: 3, truncated: false });
+  });
+
+  it('a longer text: only the first maxTextChars are kept, with both counts for the message', () => {
+    expect(truncateText('abcdef', 4)).toEqual({ text: 'abcd', textChars: 6, scannedChars: 4, truncated: true });
+  });
+
+  it('counts code points and never splits a surrogate pair', () => {
+    expect(truncateText('😀😀😀', 2)).toEqual({ text: '😀😀', textChars: 3, scannedChars: 2, truncated: true });
+    expect(truncateText('a😀b', 2)).toEqual({ text: 'a😀', textChars: 3, scannedChars: 2, truncated: true });
+  });
+
+  it('empty text is not truncated', () => {
+    expect(truncateText('', 10)).toEqual({ text: '', textChars: 0, scannedChars: 0, truncated: false });
+  });
+
+  it('a key beyond the limit is not in the scanned part; offsets and pages stay valid', () => {
+    const paged = joinPages(['page one text', `page two ${KEY}`]);
+    const kept = truncateText(paged.text, 20);
+    expect(kept.text).toBe(paged.text.slice(0, 20));
+    expect(kept.text).not.toContain(KEY);
+    expect(pageAt(paged, kept.text.length - 1)).toBe(2);
+  });
+
+  it('the default limit (2,000,000) on a 3,000,000-character text', () => {
+    const kept = truncateText('word '.repeat(600_000), 2_000_000);
+    expect([kept.text.length, kept.textChars, kept.scannedChars, kept.truncated]).toEqual([2_000_000, 3_000_000, 2_000_000, true]);
   });
 });
 
