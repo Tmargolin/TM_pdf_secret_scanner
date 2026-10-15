@@ -139,3 +139,15 @@ Against the mock API (Preparation 3).
 | 7.7 | APP-ID `wrong` → Save; `one-page.pdf` | *Couldn't scan one-page.pdf* – Your APP-ID was rejected…; clicking opens the settings |
 | 7.8 | APP-ID `mock-app-id`; restart the mock with `$env:MOCK_LATENCY_MS="15000"`; add `one-page.pdf`, then `window.close()` in the offscreen console within 15 s | *The scan of one-page.pdf was interrupted*. Afterwards `Remove-Item Env:MOCK_LATENCY_MS`, restart the mock |
 | 7.9 | Options → Advanced: *Maximum PDF size* 1 → Save; a PDF of your own > 1 MB | *Couldn't fully scan …* – The file is larger than the size limit. **Restore defaults** afterwards |
+
+## Step 8 – real sites
+
+Real API, dev build. Per site: add it in Options, reload its tab, then add
+`multi-page.pdf` and `one-page.pdf` through every path the site offers
+(picker, drag & drop, paste). Expect one `batch received` per action, the
+secrets notification for `multi-page.pdf`, none for `one-page.pdf`. Results:
+DESIGN §3 "Real-site results".
+
+| Site | Status |
+|---|---|
+| mail.google.com, drive.google.com, chatgpt.com, linkedin.com | Passed (step 8) |

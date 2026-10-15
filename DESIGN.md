@@ -15,8 +15,8 @@ Status: steps 0–7 done (tags `step-0` … `step-7`); next: step 8 (§11).
 - TypeScript + esbuild, Vitest (D1, D29); pdf.js legacy build, pinned (D2, D37).
 - **Allow list:** only sites the user adds are scanned; empty by default (D21).
 - **Detection = hand-off hooks** in the MAIN world – a PDF *handed to the page*
-  triggers a scan, not a network upload (D7, D9); event-listener safety net:
-  decided at step 8 (D8).
+  triggers a scan, not a network upload (D7, D9); no event-listener safety net
+  (D8, D40).
 - **Offscreen document owns the whole scan**; the service worker is never on
   the scan path (D3, D6); always present until step 10 (D4).
 - **Resilient concurrency** across files and tabs (§4.1, D5).
@@ -268,13 +268,25 @@ For each forwarded file:
    (`batchId`, ≤ 100 files), e.g. a multi-select or multi-file drop.
 4. Read bytes, open a port to the offscreen document, send the jobs (§2).
 
-### Future option (not in v1): event-listener safety net
+### Future option (not in v1, D40): event-listener safety net
 
 Capture-phase `change` / `drop` / `paste` listeners in the isolated world,
 independent of the MAIN-world hooks, as a fallback if a site breaks or bypasses
 the hooks. Decided to leave it out of v1 and reassess after real-site testing
 (step 8). If added, both layers feed one de-duplication keyed on
 name + size + lastModified + hash of the first bytes.
+
+### Real-site results (step 8, dev build, real API)
+
+| Site | Result |
+|---|---|
+| mail.google.com | Detected and scanned; open tabs need a reload after the list changes (§3.1) |
+| drive.google.com | Detected and scanned |
+| chatgpt.com | Detected and scanned |
+| linkedin.com | Detected and scanned |
+
+Slack and WhatsApp Web were not tested (no account). No site got around the
+hooks, so the event-listener safety net stays out (D40).
 
 ### Remaining gaps
 
@@ -778,7 +790,7 @@ before it is tagged and pushed.
 | 5 | **Extraction & job system** | pdf.js (`isEvalSupported:false`) + fixture generator + sample PDFs, encrypted/invalid/text-less errors, job registry, `maxParallelExtractions`, `maxInFlightMB`, `maxQueuedMB` (`QUEUE_FULL`), `jobTimeoutMs`, shared pdf.js worker | Correct text per page in tests (text never logged); many files at once stay within limits |
 | 6 | **Scanning** | Chunker (safe boundaries, PEM, overlap, page map), truncation, response parser, API client + retries, bounded splitting, global round-robin limiter, aggregation + masking, end-to-end pipeline | A PDF with a key on the test page reports secrets against the mock **and** the real API |
 | 7 | **Notifications** | All cases, one per batch, i18n catalogue, file-name sanitising, not-configured, `SCAN_INTERRUPTED`, partial / failed / `QUEUE_FULL` / too large | Every case in the manual checklist shows the right notification, incl. tab closed mid-scan |
-| 8 | **Real-site testing** | Developer tests Gmail / Drive / Slack / WhatsApp Web / ChatGPT; fixes with regression tests; safety-net decision | Results and safety-net decision recorded in §13 |
+| 8 | **Real-site testing** | Developer tests Gmail / Drive / ChatGPT / LinkedIn; fixes with regression tests; safety-net decision | Results and safety-net decision recorded in §13 |
 | 9 | **Hardening & docs** | Edge cases, README complete per §14, release packaging | Every §14 item ticked; zip ready → `v1.0.0` |
 | 10 | **Offscreen lifecycle** | Lazy creation (via connect-fail → `ENSURE_OFFSCREEN`), close after `offscreenIdleTimeoutSec` (offscreen reports idle, service worker closes it), measurements | No offscreen document while idle; startup cost and memory saving recorded → `v1.1.0` |
 
@@ -807,7 +819,8 @@ etc.).
 → tag `step-8`
 
 **Step 9 – hardening & docs**
-1. a. `fix: …` (one per edge case found)
+1. a. `fix: …` (one per edge case found; known: options page – on removing a
+      site, say that tabs still open on it are scanned until reloaded)
    b. `test: …` (regression test for that fix)
 2. `build: add release packaging script`
 3. `docs: complete README per §14`
@@ -849,7 +862,7 @@ etc.).
 - Offscreen document always open until step 10 (lazy creation, idle close).
 - OCR for scanned PDFs; other file types (DOCX, TXT…).
 - Automated end-to-end tests with Playwright (planned – see §15).
-- Event-listener safety net for detection (see §3) – decided at step 8.
+- No event-listener safety net (D40) – reassess if a site bypasses the hooks.
 - Files a site deliberately hides from the hooks (out of scope by threat model).
 - A site on the allow list whose Chrome access was revoked or never granted is
   silently not scanned (§3.1: scripts run on allow list ∩ granted). Future
@@ -906,6 +919,7 @@ Decisions challenged before implementation (2026-10-14).
 | D37 | pdf.js **6.4.299**, pinned (`--save-exact`), **legacy build** (`pdfjs-dist/legacy/build/`) | Modern build; raise `minimum_chrome_version` | The modern build calls very new built-ins directly (e.g. `Map.prototype.getOrInsertComputed`, `Math.sumPrecise`, `Uint8Array.toHex`), missing in Chrome 120 – a crash on the first PDF. The legacy build adds core-js polyfills (~10–20 % larger) that only affect the offscreen document and its worker. Audit clean at install. |
 | D38 | `jobTimeoutMs` counts from the moment a job **starts running** – waiting in the queue is not counted. An unexpected exception inside a job ends that job with `SCAN_INTERRUPTED` | Count from arrival; new `SCAN_FAILED` code | During a burst of uploads, files would otherwise time out just from waiting; queue waiting is bounded by `maxQueuedMB`. One existing code ("the scan stopped unexpectedly – not checked") is enough for the user. |
 | D39 | A batch with both secrets and failures → two notifications (secrets; not fully checked) | One notification about the secrets that also lists the failed files | Keeps the urgent alert short and unmixed, and no failure is buried under a secrets alert (decided by the user, step 7.1) |
+| D40 | Event-listener safety net **not added** (step 8) | Add it as a second detection layer | Every tested site (Gmail, Drive, ChatGPT, LinkedIn) was detected by the hand-off hooks alone; a second layer would add code and a cross-layer de-duplication for no observed gain. Reassess if a site is found that bypasses the hooks. |
 
 ---
 
@@ -974,7 +988,7 @@ for later (below).
 | Unit – browser | Hand-off hooks, MAIN ↔ content channel, WeakSet de-dup, PDF filter, batching – in **real Chromium** (jsdom lacks `DataTransfer`, File System Access API, real `FileList`). `FileSystemFileHandle` via OPFS; entry-chain hook logic (D36) with stand-ins (real behaviour: manual) | **Vitest browser mode** (Playwright provider, headless Chromium) | Build + CI |
 | Unit – wiring | Content script ↔ offscreen ↔ service worker: settings handshake, self-healing, registration reconcile, sender validation, notifications | Vitest + `tests/helpers/chrome-fake.ts` (in-memory `chrome.*`) | Build + CI |
 | Manual – real API | Size limit, error responses, rate limit, PII-only / URL-only texts | `scripts/probe-api.mjs` | **Developer** |
-| Manual – extension | Dev build on `test-pages/` with the **local mock API** (clean / secrets / 413 / 429 / 500 / timeout / malformed); real sites (Gmail, Drive, Slack, WhatsApp Web, ChatGPT); OS notifications incl. Focus Assist; permission prompts; real file dialogs and folder drops; memory/startup measurements (step 10) | `docs/manual-tests.md` checklist | **Developer** |
+| Manual – extension | Dev build on `test-pages/` with the **local mock API** (clean / secrets / 413 / 429 / 500 / timeout / malformed); real sites (Gmail, Drive, LinkedIn, ChatGPT); OS notifications incl. Focus Assist; permission prompts; real file dialogs and folder drops; memory/startup measurements (step 10) | `docs/manual-tests.md` checklist | **Developer** |
 
 **Coverage:** Vitest coverage (v8). Threshold **80 %** (lines and branches) for
 `src/scanner/` and `src/shared/`; no threshold for wiring code. CI fails below.
