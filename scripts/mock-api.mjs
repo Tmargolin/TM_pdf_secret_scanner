@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Local mock of the Prompt Security API for manual testing with the DEV build
-// (DESIGN.md §5, §15). Mirrors the behaviour recorded by scripts/probe-api.mjs.
+// (DESIGN.md §5, §12). Mirrors the behaviour recorded by scripts/probe-api.mjs.
 //
 //   npm run mock-api
 //   → POST http://localhost:8787/api/protect   (set this as the API URL in a dev build)

@@ -1,17 +1,17 @@
 # Testing
 
-Design: `DESIGN.md` §15
+Design: `DESIGN.md` §12
 
 | Level | Location | Tool |
 |---|---|---|
 | Unit – Node | `tests/unit/` | Vitest |
 | Unit – browser | `tests/browser/` | Vitest browser mode (Playwright Chromium) |
 | Wiring | `tests/unit/` + `tests/helpers/chrome-fake.ts` | Vitest |
-| Manual | `docs/manual-tests.md`, `test-pages/` | developer |
+| Manual | `docs/manual-tests.md`, `test-pages/` | by hand, before a release |
 
 Chrome APIs: `tests/helpers/chrome-fake.ts` – `createChromeFake()` (install /
 uninstall on `globalThis.chrome`, fake events with `dispatch`, offscreen
-documents, call records), `flushAsync()`. Extend it as new chrome.* calls are
+documents with ids (`doc-1`, …) and `closeDocument`, call records), `flushAsync()`. Extend it as new chrome.* calls are
 used. Modules with top-level code (service worker, offscreen page) are loaded
 with `vi.resetModules()` + dynamic `import()`; `__DEV__` is `true` in tests
 (`vitest.config.ts`).
@@ -44,4 +44,4 @@ Applies to every committed file – fixtures, tests, scripts, docs.
 - Coverage ≥ 80 % for `src/scanner/`, `src/shared/`.
 - Never call the real API in automated tests; use mocked `fetch` or
   `scripts/mock-api.mjs`.
-- No E2E automation in v1 (planned: Playwright, `DESIGN.md` §15).
+- No E2E automation in v1 (planned: Playwright, `DESIGN.md` §12).

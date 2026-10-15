@@ -1,4 +1,4 @@
-// In-memory stand-in for the chrome.* APIs the extension uses (DESIGN.md §15).
+// In-memory stand-in for the chrome.* APIs the extension uses (DESIGN.md §12).
 // Grows with each step: only what current code calls is implemented.
 
 import catalogue from '../../_locales/en/messages.json' with { type: 'json' };

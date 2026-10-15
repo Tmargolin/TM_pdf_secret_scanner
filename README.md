@@ -193,7 +193,7 @@ notification with the notes above.)
 
 Three choices shape the whole extension. None of them is the obvious first
 idea; each is explained below with what it costs. All decisions, with the
-alternatives that were rejected: [DESIGN.md §13](DESIGN.md).
+alternatives that were rejected: [DESIGN.md §11](DESIGN.md).
 
 ```
 web page   hooks (MAIN world) ──MessageChannel──▶ content script (isolated world)

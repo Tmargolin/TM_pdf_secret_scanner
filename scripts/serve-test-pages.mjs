@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Serves test-pages/ on localhost for manual tests with the DEV build
-// (DESIGN.md §15, docs/manual-tests.md).
+// (DESIGN.md §12, docs/manual-tests.md).
 //
 //   npm run serve:test-pages        → http://localhost:8080/upload.html
 //   PAGES_PORT=9000 npm run serve:test-pages

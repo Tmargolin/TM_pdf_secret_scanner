@@ -1,5 +1,5 @@
 // Release checks and zip writing for `npm run package` (scripts/package.ts,
-// DESIGN.md §11 step 9). Pure functions over a list of files, so they can be
+// README "Build"). Pure functions over a list of files, so they can be
 // tested without building.
 //
 // The zip is written by hand (no dependency): deflate from node:zlib, entries

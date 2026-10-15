@@ -1,5 +1,5 @@
 // Unit tests of the release checks and zip writer (scripts/release.ts,
-// DESIGN.md §11 step 9). In-memory files only – nothing is built.
+// README "Build"). In-memory files only – nothing is built.
 import { inflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { checkRelease, createZip, type PackageFile, REQUIRED_FILES } from '../../scripts/release.ts';

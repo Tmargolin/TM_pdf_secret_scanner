@@ -1,6 +1,6 @@
 # Build, manifests, CI, scripts
 
-Design: `DESIGN.md` §8 (permissions), §9, §10, §15
+Design: `DESIGN.md` §8 (permissions), §9, §12
 
 | Item | Path |
 |---|---|

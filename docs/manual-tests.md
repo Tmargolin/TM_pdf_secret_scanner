@@ -1,6 +1,6 @@
 # Manual tests
 
-Run before tagging a step: what only real Chrome shows (script injection,
+Run before a release: what only real Chrome shows (script injection,
 messaging between contexts, OS notifications, real API, real sites). The logic
 is covered by automated tests. What each notification says: README
 "Notifications – what each one means".
@@ -12,7 +12,7 @@ is covered by automated tests. What each notification says: README
 2. `npm run serve:test-pages` → open **http://localhost:8080/upload.html**
    (`localhost`, not `127.0.0.1` – only `localhost` is on the dev allow list).
 3. `npm run mock-api`; Options → API URL `http://localhost:8787/api/protect`,
-   APP-ID `mock-app-id` → Save (from step 3 on).
+   APP-ID `mock-app-id` → Save.
 4. Consoles, log level **Verbose** (debug lines are hidden by default):
    **service worker** and **offscreen document** (extension card → Inspect
    views), **page** (DevTools on the test page).
@@ -24,17 +24,17 @@ is covered by automated tests. What each notification says: README
 Each batch logs `batch received { files: N }` in the offscreen console and
 `batch done { files: N }` on the page. PDFs: `tests/fixtures/`.
 
-## Step 2 – architecture
+## Architecture
 
 | # | Do | Expect |
 |---|---|---|
-| 2.1 | Reload the extension | No errors on the card. Service worker: `content scripts reconciled { allowed: 1, active: 1 }`. Offscreen: `offscreen document loaded`, `settings received`. |
+| 2.1 | Reload the extension | No errors on the card. Service worker: `content scripts reconciled { allowed: 1, active: 1 }`. **No** offscreen document yet – it is created with the first PDF (10.1). |
 | 2.2 | Open the test page | Page: `[PSS:content] content script loaded`. |
 | 2.3 | Section 2: three PDFs | One batch: `batch received { files: 3 }`, page `batch done { files: 3 }`. |
 | 2.4 | Offscreen console: `window.close()`, then pick a PDF | Page: `scan port not accepted, asking for the offscreen document`, then `batch done`. Service worker: `offscreen document created`. |
 | 2.5 | Release build (`npm run build`), reload, reload the test page | Service worker: `allowed: 0, active: 0`; no content-script line on the page. Rebuild with `npm run build:dev`. |
 
-## Step 3 – options page and allow list
+## Options page and allow list
 
 Options page: `chrome://extensions` → Details → *Extension options*. Keep the
 service worker console open.
@@ -57,7 +57,7 @@ service worker console open.
 | 3.14 | Restart Chrome; pick a PDF on the test page | `batch received` – registration and settings survived the restart. |
 | 3.15 | *(Optional)* turn off this extension's notifications in Chrome | Red banner on the open options page; service worker warns `notifications are blocked in Chrome …`. Turn them on again → banner gone. |
 
-## Step 4 – hand-off detection
+## Hand-off detection
 
 Keep a few PDFs, a `.txt` file and a folder with PDFs in a subfolder ready. The
 page's own log shows what the "site" received.
@@ -76,14 +76,14 @@ page's own log shows what the "site" received.
 | 4.10 | The same PDF again in section 1 | A new batch (a new selection is scanned again) |
 | 4.11 | Page console during 4.2 | `[PSS:content] batch from the page { files: 1, pdfs: 1 }`; no file names in any extension log line. |
 
-## Step 5 – extraction and job system
+## Extraction and job system
 
 Each batch also logs `batch finished { outcomes: [...] }` – one code per file:
 `clean`, `secrets:N` or error codes.
 
 | # | Do | Expect (offscreen console) |
 |---|---|---|
-| 5.1 | Reload the extension | `offscreen document loaded`, `settings received`; no errors, no pdf.js warnings. |
+| 5.1 | Reload the extension, then section 1: `one-page.pdf` | `offscreen document loaded`, `settings received`; no errors, no pdf.js warnings. |
 | 5.2 | Section 1: `one-page.pdf` | `outcomes: ['clean']` |
 | 5.3 | Section 1: `encrypted.pdf` | `['PDF_ENCRYPTED']` |
 | 5.4 | Section 1: `no-text.pdf` | `['NO_TEXT_LAYER']` |
@@ -98,7 +98,7 @@ Each batch also logs `batch finished { outcomes: [...] }` – one code per file:
 Job timeout, the extraction limit and aborting are covered by automated tests
 (they need very slow or very large files to see by hand).
 
-## Step 6 – scanning
+## Scanning
 
 Each file logs `file scanned { pageCount, chunks, failedChunks, calls,
 findings, ms }`. Against the mock API (Preparation 3):
@@ -124,7 +124,7 @@ APP-ID), enter the real APP-ID → Save.
 Retries with back-off, job timeout, splitting of cut-short chunks and
 round-robin across jobs are covered by automated tests.
 
-## Step 7 – notifications
+## Notifications
 
 Against the mock API (Preparation 3).
 
@@ -140,7 +140,7 @@ Against the mock API (Preparation 3).
 | 7.8 | APP-ID `mock-app-id`; restart the mock with `$env:MOCK_LATENCY_MS="15000"`; add `one-page.pdf`, then `window.close()` in the offscreen console within 15 s | *The scan of one-page.pdf was interrupted*. Afterwards `Remove-Item Env:MOCK_LATENCY_MS`, restart the mock |
 | 7.9 | Options → Advanced: *Maximum PDF size* 1 → Save; a PDF of your own > 1 MB | *Couldn't fully scan …* – The file is larger than the size limit. **Restore defaults** afterwards |
 
-## Step 8 – real sites
+## Real sites
 
 Real API, dev build. Per site: add it in Options, reload its tab, then add
 `multi-page.pdf` and `one-page.pdf` through every path the site offers
@@ -150,9 +150,9 @@ DESIGN §3 "Real-site results".
 
 | Site | Status |
 |---|---|
-| mail.google.com, drive.google.com, chatgpt.com, linkedin.com | Passed (step 8) |
+| mail.google.com, drive.google.com, chatgpt.com, linkedin.com | Passed (v1.0) |
 
-## Step 10 – offscreen lifecycle
+## Offscreen lifecycle
 
 Dev build, mock API. Service-worker and offscreen consoles: `chrome://extensions` → *Inspect views*.
 
@@ -163,4 +163,4 @@ Dev build, mock API. Service-worker and offscreen consoles: `chrome://extensions
 | 10.3 | Wait about 10 s | Offscreen console: `idle: asking the service worker to close the document`; service worker: `offscreen document closed (idle)`; `offscreen.html` gone |
 | 10.4 | Add `multi-page.pdf` | The document comes back; *Secrets found in multi-page.pdf* |
 | 10.5 | *Close the scanner when idle for* 0 → Save; add a PDF; wait over a minute | The document stays open |
-| 10.6 | Chrome Task Manager (Shift+Esc), extension row, document open vs closed | Results: DESIGN §2 "Offscreen lifecycle from v1.1". **Restore defaults** afterwards |
+| 10.6 | Chrome Task Manager (Shift+Esc), extension row, document open vs closed | Results: DESIGN §2 "Offscreen lifecycle". **Restore defaults** afterwards |

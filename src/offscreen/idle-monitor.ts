@@ -1,5 +1,5 @@
 // Idle monitor – decides when the offscreen document is idle (DESIGN.md §2
-// "Offscreen lifecycle from v1.1", D42, docs/agents/offscreen.md).
+// "Offscreen lifecycle", D42, docs/agents/offscreen.md).
 //
 //   work begins (a scan port opens)       → idle timer stopped
 //   last work ends                        → idle timer started (offscreenIdleTimeoutSec; 0 = never)

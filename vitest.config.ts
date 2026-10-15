@@ -1,7 +1,7 @@
 import { playwright } from '@vitest/browser-playwright';
 import { defineConfig } from 'vitest/config';
 
-// Test levels (DESIGN.md §15):
+// Test levels (DESIGN.md §12):
 // - unit:    plain logic in Node            → tests/unit/**
 // - browser: page-level code in Chromium    → tests/browser/**
 // Projects inherit the root options (Vitest 5 default).

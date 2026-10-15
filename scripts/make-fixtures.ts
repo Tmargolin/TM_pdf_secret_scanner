@@ -1,4 +1,4 @@
-// Generates the sample PDFs in tests/fixtures/ (DESIGN.md §15). No library:
+// Generates the sample PDFs in tests/fixtures/ (DESIGN.md §12). No library:
 // small, readable PDF 1.4 files with standard Helvetica text, built by hand,
 // so every byte is known and reproducible.
 //

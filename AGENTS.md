@@ -38,10 +38,14 @@ service worker → `chrome.notifications`
 - Release build: no localhost permission or API URL. Incognito not allowed.
 
 ## Working rules
-- Commits: Conventional Commits; each `feat`/`fix` commit followed by its own
-  `test` commit; every commit builds and passes tests – `DESIGN.md` §10.
-- Steps and planned commits: `DESIGN.md` §11; current step = latest `step-N` tag.
-- Decisions: `DESIGN.md` §13 – do not reverse without the user's approval.
+- Commits: small, one thing each; Conventional Commits
+  (`<type>(<scope>): <summary>`, imperative, ≤ 72 chars; types `feat`, `fix`,
+  `test`, `docs`, `chore`, `build`, `ci`, `refactor`).
+- Each `feat`/`fix` commit is followed by its own `test` commit (cheapest test
+  level that proves it – `docs/agents/testing.md`); `docs`, `chore`, `build`,
+  `ci` need none. Every commit builds and passes all tests.
+- Work on `main`; releases are tagged `vX.Y.Z` (version in `package.json`).
+- Decisions: `DESIGN.md` §11 – do not reverse without the user's approval.
 - Changing a component's paths, interfaces, settings or rules → update its
   `docs/agents/*.md` in the same commit.
 
@@ -57,6 +61,7 @@ service worker → `chrome.notifications`
 | Add a message type | `protocol.md` |
 | Detect a new file source | `main-world-hooks.md` |
 | Batching, PDF filter | `content-script.md` |
+| Offscreen document created / closed (idle) | `offscreen.md`, `service-worker.md` |
 | Jobs, limits, extraction | `offscreen.md` |
 | Chunking, API calls, findings | `scanner.md` |
 | Notifications, script registration | `service-worker.md` |

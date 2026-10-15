@@ -1,5 +1,5 @@
 // npm run package – builds the release and zips it for the Chrome Web Store
-// or for sharing (DESIGN.md §11 step 9):
+// or for sharing (README "Build"):
 //   1. release build (node build.ts) into dist/
 //   2. checks (scripts/release.ts): version, no localhost, no source maps, all files
 //   3. release/pdf-secret-scanner-<version>.zip, manifest.json at the root

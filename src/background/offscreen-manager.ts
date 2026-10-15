@@ -1,5 +1,5 @@
 // Creates the offscreen document on demand and closes it when it reports idle
-// (DESIGN.md §2 "Offscreen lifecycle from v1.1", D41, D42).
+// (DESIGN.md §2 "Offscreen lifecycle", D41, D42).
 // Chrome allows only one offscreen document per extension. Create and close
 // run through ONE queue, in arrival order: an ENSURE_OFFSCREEN that arrives
 // during a close waits for it, then creates a new document. Concurrent ensures
