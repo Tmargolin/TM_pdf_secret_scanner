@@ -7,7 +7,9 @@ isolation), `extractor.ts` (`createExtractor`: `maxParallelExtractions`, one
 shared pdf.js worker), `limiter.ts` (`createLimiter`: FIFO concurrency
 limit, abortable wait), `scan-job.ts` (`createScanJob`: the work per job – the
 scan pipeline), `results.ts` (`toShowResult`, `outcomeCode` for the dev log), `batch-receiver.ts` (scan port: collect batch, `BATCH_ACCEPTED`,
-`runBatch`, `BATCH_DONE`, close), `settings-client.ts` (settings cache); uses
+`runBatch`, `BATCH_DONE`, close; `BATCH_REJECTED` while closing),
+`idle-monitor.ts` (`createIdleMonitor`: idle timer, closing state, safety
+valve), `settings-client.ts` (settings cache); uses
 `src/scanner/*`
 Design: `DESIGN.md` §2, §4, §4.1
 
@@ -21,6 +23,17 @@ Design: `DESIGN.md` §2, §4, §4.1
   after 0.5 / 2 / 5 s; accepts `SETTINGS_UPDATED` only from our own non-tab
   contexts (`isFromExtensionContext`). Jobs wait on `ready()`; APP-ID is
   registered with the safe logger.
+
+## Idle close (D42)
+- Work = a scan port from open until its batch is dropped, refused or done
+  (`BatchActivity.begin()` → end function, idempotent). A batch that keeps
+  running after the page closed still counts until `runBatch` settles.
+- No work for `offscreenIdleTimeoutSec` (`0` = never; timer starts once the
+  settings arrive and restarts on every `SETTINGS_UPDATED`) → **closing**:
+  `OFFSCREEN_IDLE` to the service worker, in the same task.
+- While closing, a new port gets `BATCH_REJECTED {batchId, reason:'closing'}`
+  on its first valid message and is closed; nothing is accepted.
+- Still open `CLOSE_GRACE_MS` (5 s) later → closing ends, idle timer restarts.
 
 ## Outputs
 - On the scan port: `BATCH_ACCEPTED` after `BATCH_END` with all files

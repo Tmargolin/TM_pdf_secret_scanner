@@ -39,6 +39,7 @@ function setup(options: { sender?: chrome.runtime.MessageSender | null; name?: s
       dev: true,
       sink: (level, line, fields) => void lines.push(fields === undefined ? { level, line } : { level, line, fields }),
     }),
+    activity: { begin: () => () => {}, isClosing: () => false },
     runBatch: (batch) => {
       runs.push(batch);
       return new Promise<void>((resolve, reject) => {

@@ -34,6 +34,12 @@ export const NUMERIC_FIELDS: readonly NumericField[] = [
   { key: 'requestTimeoutMs', label: 'Time limit per request', unit: 'ms', help: '' },
   { key: 'retries', label: 'Retries per request', unit: '', help: 'After network errors, 429 and 5xx, with back-off.' },
   { key: 'maxFileSizeMB', label: 'Maximum PDF size', unit: 'MB', help: 'Larger PDFs are reported as too large.' },
+  {
+    key: 'offscreenIdleTimeoutSec',
+    label: 'Close the scanner when idle for',
+    unit: 'seconds',
+    help: 'Frees memory between uploads; it starts again with the next PDF. 0 = never close.',
+  },
 ];
 
 /** What the form shows: everything as text, as in the input fields. */

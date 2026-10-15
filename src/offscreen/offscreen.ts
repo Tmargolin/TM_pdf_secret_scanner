@@ -13,6 +13,7 @@ import { createLogger } from '../shared/safe-logger.ts';
 import type { Settings } from '../shared/settings.ts';
 import { createBatchReceiver } from './batch-receiver.ts';
 import { createExtractor } from './extractor.ts';
+import { createIdleMonitor } from './idle-monitor.ts';
 import { createJobRegistry } from './jobs.ts';
 import { outcomeCode, toShowResult } from './results.ts';
 import { createScanJob } from './scan-job.ts';
@@ -56,9 +57,22 @@ const runScanJob = createScanJob({
 
 const jobs = createJobRegistry({ limits: currentSettings, runJob: runScanJob, log });
 
+// Idle close (D42): after offscreenIdleTimeoutSec without work, ask the
+// service worker to close this document and reject new batches meanwhile.
+const idle = createIdleMonitor({
+  timeoutSec: () => settings.current()?.offscreenIdleTimeoutSec ?? null,
+  reportIdle: () => {
+    chrome.runtime.sendMessage({ type: 'OFFSCREEN_IDLE' }).catch(() => {
+      log.warn('idle report not delivered to the service worker');
+    });
+  },
+  log,
+});
+
 const batches = createBatchReceiver({
   extensionId: chrome.runtime.id,
   log,
+  activity: idle,
   async runBatch(batch) {
     await settings.ready(); // jobs wait for the settings handshake
     log.info('batch received', { files: batch.requests.length });
@@ -75,7 +89,8 @@ const batches = createBatchReceiver({
 });
 
 chrome.runtime.onMessage.addListener((raw, sender) => {
-  if (isFromExtensionContext(sender, chrome.runtime.id)) settings.accept(raw);
+  // New or changed settings: the idle timer restarts with the current timeout.
+  if (isFromExtensionContext(sender, chrome.runtime.id) && settings.accept(raw)) idle.refresh();
   return false; // never replies
 });
 
@@ -83,3 +98,5 @@ chrome.runtime.onConnect.addListener((port) => batches.onConnect(port));
 
 log.info('offscreen document loaded');
 void settings.start();
+// The first settings arrive as the reply to OFFSCREEN_READY, not as a message.
+void settings.ready().then(() => idle.refresh());

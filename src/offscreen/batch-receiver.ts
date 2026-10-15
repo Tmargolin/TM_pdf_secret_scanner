@@ -2,7 +2,8 @@
 // docs/agents/offscreen.md). Collects one batch per port, answers
 // BATCH_ACCEPTED once all files arrived, hands the batch on, then answers
 // BATCH_DONE and closes the port. The batch keeps running if the page goes
-// away after BATCH_ACCEPTED.
+// away after BATCH_ACCEPTED. While the document is closing (idle, D42) every
+// new port is answered BATCH_REJECTED and closed, before any file is accepted.
 
 import { isFromContentScript, LIMITS, parseScanPortMessage, SCAN_PORT_NAME, type ScanRequest } from '../shared/messages.ts';
 import type { Logger } from '../shared/safe-logger.ts';
@@ -17,9 +18,18 @@ export interface ReceivedBatch {
   requests: ScanRequest[];
 }
 
+/** The idle monitor's view of the receiver's work (idle-monitor.ts). */
+export interface BatchActivity {
+  /** Work started; call the returned function when it ends. */
+  begin(): () => void;
+  /** True while the document is closing: new batches must be rejected. */
+  isClosing(): boolean;
+}
+
 export interface BatchReceiverDeps {
   extensionId: string;
   log: Logger;
+  activity: BatchActivity;
   /** Runs the batch; BATCH_DONE is sent when it settles. */
   runBatch(batch: ReceivedBatch): Promise<void>;
 }
@@ -49,6 +59,11 @@ export function createBatchReceiver(deps: BatchReceiverDeps) {
         return;
       }
 
+      // Decided once, when the port opens: a port is either rejected as a
+      // whole or counts as work until its batch is dropped or done.
+      const rejecting = deps.activity.isClosing();
+      const endWork = rejecting ? () => {} : deps.activity.begin();
+
       let batchId: string | null = null;
       const requests = new Map<string, ScanRequest>();
       let ended = false;
@@ -58,6 +73,7 @@ export function createBatchReceiver(deps: BatchReceiverDeps) {
         log.warn('scan port closed', { reason });
         ended = true;
         requests.clear();
+        endWork();
         port.disconnect();
       };
 
@@ -73,6 +89,13 @@ export function createBatchReceiver(deps: BatchReceiverDeps) {
         if (ended) return;
         const message = parseScanPortMessage(raw);
         if (message === null) return refuse('invalid message');
+        if (rejecting) {
+          ended = true;
+          post({ type: 'BATCH_REJECTED', batchId: message.batchId, reason: 'closing' });
+          log.debug('batch rejected: closing');
+          port.disconnect();
+          return;
+        }
         if (batchId === null) batchId = message.batchId;
         if (message.batchId !== batchId) return refuse('mixed batch ids');
 
@@ -99,6 +122,7 @@ export function createBatchReceiver(deps: BatchReceiverDeps) {
           .runBatch(batch)
           .catch((error: unknown) => log.error('batch failed', { error }))
           .finally(() => {
+            endWork();
             post({ type: 'BATCH_DONE', batchId: batch.batchId });
             try {
               port.disconnect();
@@ -111,7 +135,10 @@ export function createBatchReceiver(deps: BatchReceiverDeps) {
       port.onDisconnect.addListener(() => {
         void globalThis.chrome?.runtime?.lastError;
         // Before BATCH_END the batch is incomplete: drop it. After, it keeps running.
-        if (!ended) requests.clear();
+        if (!ended) {
+          requests.clear();
+          endWork();
+        }
       });
     },
   };

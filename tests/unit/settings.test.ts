@@ -55,6 +55,7 @@ describe('defaults', () => {
       requestTimeoutMs: 15_000,
       retries: 2,
       maxFileSizeMB: 25,
+      offscreenIdleTimeoutSec: 60,
     });
   });
 

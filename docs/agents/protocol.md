@@ -11,7 +11,9 @@ Design: `DESIGN.md` §2 (message flows), §8 (validation)
 | `BATCH_END` | content → offscreen | port `scan-batch` | `batchId, fileCount` – all files of the batch sent |
 | `BATCH_ACCEPTED` | offscreen → content | port `scan-batch` | `batchId` – all files received |
 | `BATCH_DONE` | offscreen → content | port `scan-batch` | `batchId` – all jobs ended; offscreen then closes the port |
+| `BATCH_REJECTED` | offscreen → content | port `scan-batch` | `batchId, reason: 'closing'` – document closing (D42), nothing accepted; port closes next |
 | `OFFSCREEN_READY` | offscreen → service worker | `runtime.sendMessage` | – (reply: `SETTINGS_UPDATED`) |
+| `OFFSCREEN_IDLE` | offscreen → service worker | `runtime.sendMessage` | – idle for `offscreenIdleTimeoutSec`, rejecting new batches: close the document (D42) |
 | `SETTINGS_UPDATED` | service worker → offscreen | `runtime.sendMessage` | settings |
 | `SHOW_RESULT` | offscreen → service worker | `runtime.sendMessage` | `batchId, origin` (from `port.sender`), `results: ScanResult[]` (masked findings only) |
 | `ENSURE_OFFSCREEN` | content → service worker | `runtime.sendMessage` | – (reply: `{ ok }`) |

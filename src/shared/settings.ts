@@ -34,6 +34,8 @@ export interface Settings {
   retries: number;
   /** Larger PDFs are not scanned (reported as too large). */
   maxFileSizeMB: number;
+  /** Seconds without work before the offscreen document is closed; 0 = never (D42). */
+  offscreenIdleTimeoutSec: number;
 }
 
 export type NumericSettingKey = {
@@ -64,7 +66,12 @@ export const NUMERIC_LIMITS: Readonly<Record<NumericSettingKey, { min: number; m
   retries: { min: 0, max: 5 },
   // Files travel base64-encoded in one message (64 MB limit): 45 MB → ~60 MB.
   maxFileSizeMB: { min: 1, max: 45 },
+  // 0 = never close; 1–9 are rejected by checkNumber (MIN_IDLE_TIMEOUT_SEC).
+  offscreenIdleTimeoutSec: { min: 0, max: 3_600 },
 };
+
+/** Shortest idle time before closing, other than 0 (never): closing and re-creating more often costs more than it saves. */
+export const MIN_IDLE_TIMEOUT_SEC = 10;
 
 /** Defaults from DESIGN.md §6. Dev builds also pre-fill the localhost site. */
 export function getDefaultSettings(dev: boolean): Settings {
@@ -84,6 +91,7 @@ export function getDefaultSettings(dev: boolean): Settings {
     requestTimeoutMs: 15_000,
     retries: 2,
     maxFileSizeMB: 25,
+    offscreenIdleTimeoutSec: 60,
   };
 }
 
@@ -127,6 +135,9 @@ export function checkNumber(key: NumericSettingKey, value: unknown): string | nu
   const { min, max } = NUMERIC_LIMITS[key];
   if (typeof value !== 'number' || !Number.isInteger(value)) return `${key} must be a whole number`;
   if (value < min || value > max) return `${key} must be between ${min} and ${max}`;
+  if (key === 'offscreenIdleTimeoutSec' && value > 0 && value < MIN_IDLE_TIMEOUT_SEC) {
+    return `${key} must be 0 (never close) or between ${MIN_IDLE_TIMEOUT_SEC} and ${max}`;
+  }
   return null;
 }
 

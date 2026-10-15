@@ -57,7 +57,8 @@ export function createScanSender(deps: ScanSenderDeps) {
           accepted = true;
           return;
         }
-        finish('done');
+        // BATCH_REJECTED: the document is closing and kept nothing – same as never accepted.
+        finish(reply.type === 'BATCH_DONE' ? 'done' : 'not-accepted');
         port.disconnect();
       });
 

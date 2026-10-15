@@ -20,8 +20,8 @@ Port `chrome.runtime.connect({ name: 'scan-batch' })` → `SCAN_REQUEST` per fil
 3. Files within 300 ms of the first one → one batch (`batchId`), one port;
    a batch with no PDF sends nothing.
 4. Bytes sent as base64.
-5. Port closes before `BATCH_ACCEPTED` → `ENSURE_OFFSCREEN` to service worker →
-   resend the batch once. Closes again before `BATCH_ACCEPTED`, or closes after
+5. Port closes before `BATCH_ACCEPTED`, or `BATCH_REJECTED` (document
+   closing, D42) → `ENSURE_OFFSCREEN` to service worker → resend the batch once. Closes again before `BATCH_ACCEPTED`, or closes after
    `BATCH_ACCEPTED` but before `BATCH_DONE` → `SCAN_INTERRUPTED` to service
    worker. `BATCH_DONE` → finished. Never match Chrome's error text.
 

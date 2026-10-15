@@ -51,8 +51,19 @@ export interface BatchDone {
   batchId: string;
 }
 
+/**
+ * offscreen document → content script, over the scan port: the document is
+ * closing (idle, D42); no file was accepted. The port closes next; the content
+ * script asks for a new document and resends.
+ */
+export interface BatchRejected {
+  type: 'BATCH_REJECTED';
+  batchId: string;
+  reason: 'closing';
+}
+
 /** Replies on the scan port. They carry no results: results never go back to the page. */
-export type ScanPortReply = BatchAccepted | BatchDone;
+export type ScanPortReply = BatchAccepted | BatchDone | BatchRejected;
 
 /** offscreen document → service worker, once it has loaded. Reply: SettingsReply. */
 export interface OffscreenReady {
@@ -79,6 +90,11 @@ export interface EnsureOffscreen {
   type: 'ENSURE_OFFSCREEN';
 }
 
+/** offscreen document → service worker: idle for offscreenIdleTimeoutSec, now rejecting new batches – close me (D42). */
+export interface OffscreenIdle {
+  type: 'OFFSCREEN_IDLE';
+}
+
 /** content script → service worker: the scan port dropped before the batch finished. */
 export interface ScanInterrupted {
   type: 'SCAN_INTERRUPTED';
@@ -86,7 +102,7 @@ export interface ScanInterrupted {
   fileNames: string[];
 }
 
-export type RuntimeMessage = OffscreenReady | SettingsMessage | ShowResult | EnsureOffscreen | ScanInterrupted;
+export type RuntimeMessage = OffscreenReady | OffscreenIdle | SettingsMessage | ShowResult | EnsureOffscreen | ScanInterrupted;
 
 // ---------- small checks ----------
 
@@ -148,6 +164,9 @@ export function parseScanPortReply(data: unknown): ScanPortReply | null {
   if (!isRecord(data) || !isId(data['batchId'])) return null;
   if (data['type'] === 'BATCH_ACCEPTED') return { type: 'BATCH_ACCEPTED', batchId: data['batchId'] };
   if (data['type'] === 'BATCH_DONE') return { type: 'BATCH_DONE', batchId: data['batchId'] };
+  if (data['type'] === 'BATCH_REJECTED' && data['reason'] === 'closing') {
+    return { type: 'BATCH_REJECTED', batchId: data['batchId'], reason: 'closing' };
+  }
   return null;
 }
 
@@ -215,6 +234,8 @@ export function parseRuntimeMessage(data: unknown, dev: boolean): RuntimeMessage
   switch (data['type']) {
     case 'OFFSCREEN_READY':
       return { type: 'OFFSCREEN_READY' };
+    case 'OFFSCREEN_IDLE':
+      return { type: 'OFFSCREEN_IDLE' };
     case 'ENSURE_OFFSCREEN':
       return { type: 'ENSURE_OFFSCREEN' };
     case 'SETTINGS_UPDATED': {
