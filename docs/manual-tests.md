@@ -139,3 +139,20 @@ APP-ID), enter the real APP-ID → Save.
 
 Retries with back-off, job timeout, splitting of cut-short chunks and
 round-robin across jobs are covered by automated tests.
+
+## Step 7 – notifications
+
+Dev build, mock API (`npm run mock-api`, API URL
+`http://localhost:8787/api/protect`, APP-ID `mock-app-id`), test page. What
+each notification says: README "Notifications – what each one means".
+
+| # | Do | Expect |
+|---|---|---|
+| 7.1 | Section 1: `multi-page.pdf` | **Secrets found in multi-page.pdf** – You added it to localhost:8080. / AWS credentials (p. 2) AKIA…LE / Remove the file and rotate the credentials. Stays until dismissed |
+| 7.2 | Section 1: `one-page.pdf` | No notification (clean) |
+| 7.3 | Section 1: `encrypted.pdf` | **Couldn't fully scan encrypted.pdf** – The PDF is password-protected – it was not checked. |
+| 7.4 | Section 2: `multi-page.pdf` + `encrypted.pdf` + `one-page.pdf` | **Two** notifications (D39): *Secrets found in multi-page.pdf* and *Couldn't fully scan encrypted.pdf* |
+| 7.5 | Section 2: `encrypted.pdf` + `no-text.pdf` | *Couldn't fully scan 2 of 2 files*, one line per file |
+| 7.6 | Options: clear the APP-ID → Save; add `one-page.pdf` twice | **One** *PDF Secret Scanner isn't set up*; clicking it opens the settings and closes it |
+| 7.7 | APP-ID `wrong` → Save; `one-page.pdf` | *Couldn't scan one-page.pdf* – Your APP-ID was rejected…; clicking opens the settings |
+| 7.8 | APP-ID `mock-app-id`; restart the mock with `$env:MOCK_LATENCY_MS="15000"`; add `one-page.pdf`, then `window.close()` in the offscreen console within 15 s | *The scan of one-page.pdf was interrupted*. Afterwards `Remove-Item Env:MOCK_LATENCY_MS`, restart the mock |
