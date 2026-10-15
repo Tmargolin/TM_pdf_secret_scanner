@@ -1,8 +1,18 @@
-// Scan outcome → ScanResult fields (DESIGN.md §4, docs/agents/scanner.md).
-// So far: the status rules. De-duplication, page numbers and masking of
-// findings follow in 6.7.
+// Scan outcome → ScanResult fields (DESIGN.md §4 step 5, docs/agents/scanner.md).
+//
+//   raw secrets from every chunk ──aggregateFindings──▶ MaskedFinding[]
+//     - de-duplicated: same entity type + same value (overlapping chunks and
+//       split halves report the same secret more than once)
+//     - pages: every place the value occurs in the page texts; [] if the
+//       API's value cannot be found verbatim (the finding is still kept)
+//     - masked (mask.ts) – the plain value never leaves this function
+//     - in reading order (first occurrence); not-located ones last
+//   status: scanStatus (below)
 
-import type { ErrorCode, ScanError, ScanStatus } from '../shared/types.ts';
+import type { ErrorCode, MaskedFinding, ScanError, ScanStatus } from '../shared/types.ts';
+import { pageAt, type PagedText } from './chunker.ts';
+import { maskSecret } from './mask.ts';
+import type { RawFinding } from './parse.ts';
 
 /**
  * DESIGN.md §4 status rules:
@@ -24,4 +34,37 @@ export function scanStatus(secretsFound: number, errors: readonly ScanError[]): 
 export function uniqueErrors(errors: readonly ScanError[]): ScanError[] {
   const seen = new Set<ErrorCode>();
   return errors.filter((error) => !seen.has(error.code) && seen.add(error.code));
+}
+
+/** Page numbers (sorted, each once) of every occurrence of `value` in the text. */
+export function pagesOf(paged: PagedText, value: string): number[] {
+  const pages = new Set<number>();
+  for (let at = paged.text.indexOf(value); at >= 0; at = paged.text.indexOf(value, at + value.length)) {
+    pages.add(pageAt(paged, at));
+  }
+  return [...pages].sort((a, b) => a - b);
+}
+
+/** Raw secrets (unmasked, possibly repeated) → findings ready for a SHOW_RESULT. */
+export function aggregateFindings(secrets: readonly RawFinding[], paged: PagedText): MaskedFinding[] {
+  const unique = new Map<string, RawFinding>();
+  for (const secret of secrets) {
+    // A secret without a value cannot be told apart from another of its kind: one per type and category.
+    const key = JSON.stringify([secret.entityType, secret.entity ?? null, secret.entity === null ? secret.category : null]);
+    if (!unique.has(key)) unique.set(key, secret);
+  }
+  const located = [...unique.values()].map((secret) => {
+    const first = secret.entity === null ? -1 : paged.text.indexOf(secret.entity);
+    return {
+      first: first < 0 ? Number.POSITIVE_INFINITY : first,
+      finding: {
+        entityType: secret.entityType,
+        category: secret.category,
+        masked: maskSecret(secret.entity),
+        pages: secret.entity === null ? [] : pagesOf(paged, secret.entity),
+      },
+    };
+  });
+  // Array.prototype.sort is stable: equal positions keep the order the API reported them in.
+  return located.sort((a, b) => a.first - b.first).map((entry) => entry.finding);
 }
