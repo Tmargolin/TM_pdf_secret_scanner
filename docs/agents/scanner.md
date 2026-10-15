@@ -9,10 +9,10 @@ Design: `DESIGN.md` §4, §4.2, §5
 | Module | In → Out |
 |---|---|
 | `extract.ts` | PDF bytes → text per page (`extractText`, throws; `extractPages`, never throws → `{ ok, pages }` or `{ ok: false, code }`); `DOCUMENT_OPTIONS` (`isEvalSupported: false`, no fonts, no XFA, no canvas); document always destroyed; optional `worker` (shared) and `signal` (abort destroys the document). `PasswordException` → `PDF_ENCRYPTED`; any other error → `PDF_INVALID`; only whitespace → `NO_TEXT_LAYER`; owner-password-only files open and are scanned |
-| `chunker.ts` | `joinPages` (pages → one text + `pageStarts`), `pageAt` / `pagesInRange` (offset → page, binary search), `chunkText(text, { chunkSize, chunkOverlap, maxRequestBytes })` → `{ start, end, text }[]`: ≤ `chunkSize` code points and ≤ `maxRequestBytes` JSON body (`requestBodyBytes`, `jsonUtf8Bytes`); ends after whitespace (blank line > line break > space, best in the window's second half), never inside a token or a PEM block (`findPemBlocks`), forced cut only for unbroken spans; overlap snapped to a word start; whitespace-only chunks dropped. Truncation at `maxTextChars`: 6.2 |
+| `chunker.ts` | `joinPages` (pages → one text + `pageStarts`), `pageAt` / `pagesInRange` (offset → page, binary search), `chunkText(text, { chunkSize, chunkOverlap, maxRequestBytes })` → `{ start, end, text }[]`: ≤ `chunkSize` code points and ≤ `maxRequestBytes` JSON body (`requestBodyBytes`, `jsonUtf8Bytes`); ends after whitespace (blank line > line break > space, best in the window's second half), never inside a token or a PEM block (`findPemBlocks`), forced cut only for unbroken spans; overlap snapped to a word start; whitespace-only chunks dropped. `truncateText(text, maxTextChars)` → the first `maxTextChars` code points + `textChars` / `scannedChars` / `truncated` (→ `TEXT_TRUNCATED`) |
 | `api-client.ts` | chunk → API response; timeout, retries, global limiter (round-robin), bounded splitting |
 | `parse.ts` | API JSON → findings (`result.prompt.findings.Secrets`) |
-| `aggregate.ts` | findings → de-duplicated findings with pages + `ScanResult` status |
+| `aggregate.ts` | `scanStatus(secretsFound, errors)`: secrets → `secrets`; else any error (text not checked, e.g. `TEXT_TRUNCATED`, failed chunk) → `error`; else `clean`. `uniqueErrors` (each code once). Findings → de-duplicated, with pages, masked: 6.7 |
 | `mask.ts` | secret → first 4 + `…` + last 2; < 12 chars → `FULLY_MASKED` (`••••••`); output must pass `isMaskedValue` (`messages.ts`) |
 
 ## Rules

@@ -1,6 +1,7 @@
 // Text → chunks for the API (DESIGN.md §4.2, docs/agents/scanner.md).
 //
 //   pages ──joinPages──▶ one text + page start offsets (pageAt: offset → page)
+//   text  ──truncateText▶ the first maxTextChars code points (TEXT_TRUNCATED)
 //   text  ──chunkText──▶ chunks { start, end, text }, each within chunkSize code
 //                        points AND maxRequestBytes of JSON request body
 //
@@ -73,6 +74,33 @@ export function pagesInRange(paged: PagedText, start: number, end: number): numb
   const first = pageAt(paged, start);
   const last = pageAt(paged, end - 1);
   return Array.from({ length: last - first + 1 }, (_, i) => first + i);
+}
+
+export interface TruncatedText {
+  /** The part that is scanned. */
+  text: string;
+  /** Code points in the whole text. */
+  textChars: number;
+  /** Code points in the scanned part (≤ maxTextChars). */
+  scannedChars: number;
+  /** True if text was left out – the result must then carry TEXT_TRUNCATED. */
+  truncated: boolean;
+}
+
+/**
+ * Keeps the first `maxTextChars` code points of the text (never splitting a
+ * surrogate pair). Offsets in the kept part are the same as in the whole
+ * text, so page mapping still works.
+ */
+export function truncateText(text: string, maxTextChars: number): TruncatedText {
+  let codePoints = 0;
+  let cut = -1;
+  for (let i = 0; i < text.length; i += codePointLength(text, i)) {
+    if (codePoints === maxTextChars) cut = i;
+    codePoints++;
+  }
+  if (cut < 0) return { text, textChars: codePoints, scannedChars: codePoints, truncated: false };
+  return { text: text.slice(0, cut), textChars: codePoints, scannedChars: maxTextChars, truncated: true };
 }
 
 /** Bytes of {"prompt":""} around the text. */
