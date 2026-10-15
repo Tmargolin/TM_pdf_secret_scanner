@@ -4,35 +4,27 @@ A Chrome extension (Manifest V3) that notices when the user adds a PDF to a
 website on the user's allow list, extracts its text, sends the text to the Prompt Security API, and shows
 a notification if secrets are found or if the scan could not be completed.
 
-Status: **design approved – ready for implementation (step 0)**
+Status: steps 0–7 done (tags `step-0` … `step-7`); next: step 8 (§11).
 
 ---
 
-## 1. Decisions
+## 1. Decisions (summary – rationale in §13)
 
-| Topic | Decision |
-|---|---|
-| Version control | **Git**, hosted on **GitHub**; small, logically coherent commits (see §10) |
-| Language | **TypeScript**, compiled with **esbuild**; unit tests with **Vitest** |
-| PDF text extraction | **pdf.js** (`pdfjs-dist`) |
-| On secret found | **Alert only** (notification, §7). The upload is **not** blocked. *Requirement – not open for change.* |
-| On API / scan failure | Informative alert stating what failed |
-| Scope | **Allow list:** the scanner runs only on sites the user adds (§3.1). Empty by default – nothing is scanned until sites are added. Limits exposure of document text to the vendor. |
-| Upload detection | **Hand-off hooks**: wrap the browser APIs through which a page obtains a `File` (§3). Event-listener safety net: future option, not in v1. |
-| Alerts | **Chrome system notifications only** – one place that works whether the page is still open, the upload was in an iframe, or the tab is gone (§7) |
-| What triggers a scan | A PDF **handed to the page** (the page's JavaScript obtained the `File`), not a network upload |
-| Threat model | Protects the user from **accidental** leaks; does not defend against a site deliberately evading the extension (§8) |
-| API size limit | The API **silently stops scanning** somewhere between 128k and 256k characters (HTTP 200, no error) – measured in step 1 (§5). Chunks default to **32,000 characters** (max 50,000); bounded automatic shrinking if the API reports fewer characters than sent (§4.2) |
-| Very large text | Scan the first `maxTextChars` and warn "partially scanned" (§4.2) |
-| Where pdf.js runs | **Offscreen document** (not the service worker, not the content script) – see §13 |
-| Offscreen lifecycle | v1: **always present** while the extension runs; lazy creation + idle close is a later step (step 10) |
-| Concurrency | Must be **resilient to concurrent uploads** (multi-file, multi-tab) – see §4.1 |
-| Offscreen responsibility | **Whole scan pipeline** in the offscreen document; content script talks to it directly; service worker never on the scan path – see §2, §13 |
-
-**Consequence of "alert, don't block":** the extension only *observes* upload
-events, it never stops or re-dispatches them. Sites keep working exactly as
-before. The alert may appear after the upload has finished; its purpose is to
-tell the user to remove the file / rotate the secret.
+- **Alert only, never block** (R1 – a requirement): the extension observes; the
+  alert tells the user to remove the file / rotate the secret.
+- TypeScript + esbuild, Vitest (D1, D29); pdf.js legacy build, pinned (D2, D37).
+- **Allow list:** only sites the user adds are scanned; empty by default (D21).
+- **Detection = hand-off hooks** in the MAIN world – a PDF *handed to the page*
+  triggers a scan, not a network upload (D7, D9); event-listener safety net:
+  decided at step 8 (D8).
+- **Offscreen document owns the whole scan**; the service worker is never on
+  the scan path (D3, D6); always present until step 10 (D4).
+- **Resilient concurrency** across files and tabs (§4.1, D5).
+- The API silently stops scanning long texts → 32k-character chunks, bounded
+  shrinking, partial scans reported, never "clean" for unchecked text (§4.2,
+  D12, D13, D34).
+- **Chrome notifications only** (D16); threat model: accidental leaks (D10).
+- Git + GitHub, small commits, CI (§10, D30).
 
 ---
 
@@ -130,14 +122,10 @@ nothing is lost.
    document died mid-scan), the content script sends `SCAN_INTERRUPTED` to the
    service worker → failure notification. No matching of Chrome's error text.
 
-**Verified in step 2 (2026-10-14, Chrome on Windows, `docs/manual-tests.md`
-checks 2.3–2.7):** (a) content-script ports reach the offscreen document's
-`runtime.onConnect` **directly** – the service worker is not involved; after
-the offscreen document was closed, `ENSURE_OFFSCREEN` re-created it and the
-resent batch completed. (b) Extension messaging **still JSON-serialises**
-payloads: a `Uint8Array` arrives as `{"0":1,"1":2,"2":3}` and an `ArrayBuffer`
-as `{}` – bytes therefore keep travelling as base64. The planned fallback
-(service worker relaying scan messages) is not needed.
+**Verified in step 2 (Chrome on Windows):** content-script ports reach the
+offscreen document **directly**, and `ENSURE_OFFSCREEN` re-creates a closed
+document; extension messaging still JSON-serialises payloads (`Uint8Array` →
+`{"0":1,…}`), so bytes travel as base64.
 
 Notifications are shown by the service worker because the offscreen document
 can only use `chrome.runtime`. This is display only: one short event per
@@ -158,9 +146,9 @@ batch, after the scan is complete.
   `chrome.storage.local` – never in a web page.
 
 Why bytes travel as **base64**: runtime messaging JSON-serialises its payload
-(ArrayBuffers don't survive). With the 25 MB file cap, base64 (~33 MB) stays
-under Chrome's 64 MB message limit. Going directly content script → offscreen
-means one hop, one copy.
+(ArrayBuffers don't survive). `maxFileSizeMB` (default 25, max 45) keeps the
+base64 (≤ ~60 MB) under Chrome's 64 MB message limit. Going directly content
+script → offscreen means one hop, one copy.
 
 Offscreen lifecycle (v1): always present while the extension runs (ensured on
 install, browser start and every service-worker start – e.g. after the
@@ -214,7 +202,7 @@ documents are ever sent to the vendor.
   `permissions.onAdded`, `permissions.onRemoved` (e.g. revoked in
   `chrome://extensions`). Configuration-time only – not on the scan path.
 
-**Behaviour to know (documented in the README)**
+**Behaviour to know (README, §14)**
 - Matching is per **frame URL**: an upload widget in a cross-origin iframe is
   scanned only if the iframe's site is also on the list. `about:blank` /
   `srcdoc` frames inherit their parent's origin (`matchOriginAsFallback`).
@@ -274,8 +262,8 @@ For each forwarded file:
    as name + size only (no bytes, `skipped: 'FILE_TOO_LARGE'`), so the
    offscreen document reports it in the batch's notification (the content
    script has no UI).
-3. **Batching** – files forwarded within the same task / 300 ms window form a
-   batch (`batchId`), e.g. a multi-select or multi-file drop.
+3. **Batching** – files forwarded within 300 ms of the first one form a batch
+   (`batchId`, ≤ 100 files), e.g. a multi-select or multi-file drop.
 4. Read bytes, open a port to the offscreen document, send the jobs (§2).
 
 ### Future option (not in v1): event-listener safety net
@@ -353,9 +341,10 @@ document restarted mid-scan; one bad PDF among good ones.
 
 **Jobs.** Every file becomes a job:
 `{ scanId (UUID), batchId, tabId, frameId, fileName, size, state }` with states
-`queued → extracting → scanning → done | failed` (a timeout is a failure). Files from one
-user action share a `batchId`. A job registry in the scan coordinator tracks
-all jobs (it lives in the offscreen document); each job is isolated – an exception in one never affects another.
+`queued → running → done | failed` (a timeout is a failure). Files from one
+user action share a `batchId`. A job registry in the offscreen document tracks
+all jobs; each job is isolated – an exception in one never affects another
+(D38).
 
 **Limits (all global, across every tab):**
 
@@ -394,12 +383,6 @@ the in-flight creation promise, so concurrent callers share one creation; an
 **Batched notification.** The offscreen document groups results by `batchId`
 and sends one `SHOW_RESULT` per batch when all its jobs end ("2 of 3 files
 contain secrets").
-
-**Tests (deterministic, fake timers + mocked fetch):** WeakSet de-duplication of repeated `.files` reads; N jobs × M chunks never
-exceed `maxConcurrency`; round-robin fairness; concurrent `ensureOffscreen()`
-creates exactly one document; connect-fail → `ENSURE_OFFSCREEN` → retry; a timed-out job leaves others intact; a page disconnect does not stop the scan; admission
-control queues jobs above `maxInFlightMB` and rejects above `maxQueuedMB`; job timeout; port disconnect in both
-directions.
 
 ### 4.2 Chunking
 
@@ -446,8 +429,8 @@ other multi-byte text safe.
   sent, or the API answers HTTP 413. A cut-short chunk is split in half at the
   best boundary and both halves are retried.
 - The **effective chunk size** for the rest of the session becomes the smaller
-  size, so later chunks don't fail the same way. It resets to `chunkSize` when
-  settings change or the offscreen document restarts.
+  size, so later chunks don't fail the same way. It resets when `chunkSize`
+  changes or the offscreen document restarts.
 - **It only ever shrinks – never grows** beyond the configured `chunkSize`.
 - **Floor:** never below `MIN_CHUNK_CHARS` (500). A chunk that is still rejected
   at the floor fails with `CHUNK_TOO_LARGE` (counted in `failedChunks`).
@@ -511,7 +494,8 @@ Parsing rules:
   We deliberately do *not* rely on `action`/`passed`, because those reflect the
   server-side policy (e.g. "Sensitive Data" could also cause a block, or Secrets
   could be switched to "log").
-- `status !== "success"` or missing `result.prompt` → `API_BAD_RESPONSE`.
+- `status !== "success"`, missing `result.prompt` or no `findings` object →
+  `API_BAD_RESPONSE` (never read as clean).
 - `Token Limitation[0].chunks_required > 1` → log a warning (our chunk is larger
   than the server prefers); useful for tuning the default.
 - Other finding groups (e.g. "Sensitive Data") are ignored in v1.
@@ -580,8 +564,7 @@ no rate limiting observed (`maxConcurrency` stays 4).
 | `maxFileSizeMB` | 25 | Allowed 1–45: files travel base64-encoded in one message (64 MB limit) |
 | `offscreenIdleTimeoutSec` | 60 | Added in step 10 only |
 
-All defaults are documented in the README (see §14 for everything the README
-must contain).
+The README lists all defaults from step 9 (§14).
 
 ---
 
@@ -596,12 +579,16 @@ One notification per **batch** (user action). `requireInteraction: true` for
 secrets and failures, so it stays until the user dismisses it (where the OS
 supports it).
 
-| Case | Title | Message |
+Exact texts for every case and error code: README "Notifications – what each
+one means" (source: `_locales/en/messages.json`).
+
+| Case | Title | Notes |
 |---|---|---|
-| Secrets found | "Secrets found in file.pdf" (or "2 of 3 files contain secrets") | "You added it to example.com. AWS credentials (p. 3) AKIA…B1, GitHub token (p. 5) ghp_…9x. Remove the file and rotate the credentials." – max 3 findings listed, then "+N more" |
-| Scan failed / partial | "Couldn't fully scan file.pdf" | Reason per `ErrorCode`, e.g. "The scanning service could not be reached – the file was not checked." / "Only the first 2,000,000 characters were checked." |
-| Not configured | "PDF Secret Scanner isn't set up" | "Click to add your APP-ID." – click opens the options page |
-| APP-ID rejected (`API_UNAUTHORIZED`) | "Couldn't scan file.pdf" | "Your APP-ID was rejected – check the extension settings." – click opens the options page |
+| Secrets found | "Secrets found in file.pdf" / "2 of 3 files contain secrets" | Max 3 findings (type, pages, masked value), then "+N more"; notes on unchecked text |
+| Not (fully) checked | "Couldn't fully scan file.pdf" / "… 2 of 3 files" | Reason per `ErrorCode` |
+| APP-ID rejected | "Couldn't scan file.pdf" | Click opens the options page |
+| Not configured | "PDF Secret Scanner isn't set up" | One notification for all batches; click opens the options page |
+| Scan interrupted | "The scan of file.pdf was interrupted" | From `SCAN_INTERRUPTED`; a late result replaces it |
 | Clean | – | No notification |
 
 **Mixed batch (D39):** if some files of a batch contain secrets and others
@@ -612,15 +599,15 @@ only partly checked stays in the secrets notification, with the notes.
 Notes:
 - Notification text is short by nature (the OS truncates long messages), hence
   the compact format and the 3-finding limit.
-- All strings live in `_locales/en/messages.json` (`chrome.i18n`,
-  `default_locale: "en"` in the manifest) from the start, so other languages (e.g. Hebrew) can be added without code changes.
+- All strings live in `_locales/en/messages.json` (`chrome.i18n`), so other
+  languages (e.g. Hebrew) can be added without code changes.
 - **OS settings matter:** if the user has disabled notifications for Chrome or
   enabled Focus Assist / Do Not Disturb, notifications may be hidden. Two
   levels:
   - *Blocked in Chrome* (for this extension) – detectable:
     `chrome.notifications.getPermissionLevel()` is `"denied"`. The options page
     shows a warning, and the service worker logs it at start-up and on
-    `onPermissionLevelChanged` (step 3.5).
+    `onPermissionLevelChanged`.
   - *Blocked by the operating system* – **not detectable**: Chrome hands the
     notification to the OS and `create()` succeeds. Seen in step 2 on Windows.
     The README lists enabled Chrome notifications as a requirement.
@@ -674,8 +661,8 @@ page).
 **pdf.js parses untrusted files with extension privileges**
 - `isEvalSupported: false`; keep the MV3 default CSP (no `unsafe-eval`, no
   remote code).
-- pdf.js version pinned in `package-lock.json`; `npm audit` runs in the build;
-  Dependabot enabled on GitHub. (Reference: CVE-2024-4367, code execution via
+- pdf.js version pinned (D37); `npm audit` runs in CI; Dependabot enabled on
+  GitHub. (Reference: CVE-2024-4367, code execution via
   crafted fonts in older pdf.js.)
 
 **Message validation**
@@ -694,7 +681,7 @@ page).
 **Known, not handled in this version**
 - A hostile page can flood the extension with files (API quota, CPU,
   notification spam) – no per-tab rate limit yet; global limits (§4.1) only
-  bound concurrency. Documented in the README.
+  bound concurrency. To be stated in the README (§14).
 
 **Permissions:** `storage`, `offscreen`, `notifications`, `scripting`;
 `host_permissions`: `https://eu.prompt.security/*`;
@@ -702,13 +689,13 @@ page).
 it to the allow list (§3.1). No install-time access to websites. One runtime
 dependency (pdf.js), committed lockfile, no remotely loaded code.
 
-**Minimum Chrome version:** `minimum_chrome_version` in the manifest (expected
-120; exact value confirmed in step 0) – needed for the offscreen API (109),
+**Minimum Chrome version:** `minimum_chrome_version` 120 – needed for the
+offscreen API (109),
 `runtime.getContexts` (116) and registered MAIN-world content scripts with
 `matchOriginAsFallback`.
 
-**API URL:** accepted only if it is `https://` and its host is covered by
-`host_permissions`; anything else is rejected on the options page.
+**API URL:** accepted only if it is `https://` on an allowed API host (the
+host in `host_permissions`); anything else is rejected on the options page.
 **Development builds only** also accept `http://localhost:<port>` so the local
 mock API can be used; the release build rejects it (covered by tests).
 
@@ -717,40 +704,18 @@ mock API can be used; the release build rejects it (covered by tests).
 ## 9. Project layout
 
 ```
-TM_Chrome_ext/                     ← Git repository root (GitHub remote: origin)
-├─ .git/
-├─ .gitignore                      node_modules/, dist/, *.zip, coverage/, .env*, OS/editor junk
-├─ .gitattributes                  * text=auto eol=lf  (consistent line endings on Windows)
-├─ manifest.json
-├─ _locales/en/messages.json
-├─ icons/          icon-16/32/48/128.png (toolbar, extensions page, notifications)
+TM_Chrome_ext/
+├─ manifest.json, _locales/en/messages.json, icons/
+├─ package.json, tsconfig.json, vitest.config.ts, build.ts (esbuild)
 ├─ .github/        dependabot.yml, workflows/ci.yml
-├─ package.json, package-lock.json, tsconfig.json, vitest.config.ts
-├─ build.ts                        esbuild build script (Node runs TypeScript directly)
-├─ src/
-│  ├─ main-world/   handoff-hooks.ts (wrapped APIs, WeakSet), channel.ts, index.ts
-│  ├─ content/      index.ts, pipeline.ts, bridge.ts, batcher.ts, pdf-filter.ts, encode.ts, scan-sender.ts
-│  ├─ background/   service-worker.ts, offscreen-manager.ts, settings-bridge.ts, script-registry.ts,
-│  │                notifications.ts
-│  ├─ offscreen/    offscreen.html, offscreen.ts, settings-client.ts, batch-receiver.ts, jobs.ts, results.ts
-│  ├─ scanner/      extract.ts, chunker.ts, api-client.ts, parse.ts, aggregate.ts, mask.ts
-│  ├─ options/      options.html, options.ts, form.ts
-│  └─ shared/       settings.ts, messages.ts, types.ts, safe-logger.ts, scan-port.ts, notification-permission.ts
-├─ tests/
-│  ├─ fixtures/     api-*.json, sample PDFs
-│  ├─ helpers/      chrome-fake.ts, port-pair.ts
-│  ├─ unit/         *.test.ts        (Node)
-│  └─ browser/      *.test.ts        (Vitest browser mode, Chromium)
-├─ scripts/        manifest.ts, probe-api.mjs, make-fixtures.ts, serve-test-pages.mjs, mock-api.mjs
-├─ docs/           manual-tests.md
-│  └─ agents/       one guide per component + protocol, testing, build (for AI agents)
-├─ test-pages/      upload.html (input, detached input, shadow DOM, drop, paste,
-│                   folder drop, showOpenFilePicker, multi-file)
-├─ dist/            build output → "Load unpacked" from here   (git-ignored)
-├─ AGENTS.md                       agent guide – master (index, global rules, commands)
-├─ CLAUDE.md                       `@AGENTS.md` (Claude Code import)
-├─ README.md
-└─ DESIGN.md
+├─ src/            main-world/ content/ offscreen/ scanner/ background/ options/ shared/
+│                  (files per folder: docs/agents/*.md)
+├─ tests/          unit/ (Node), browser/ (Vitest browser mode), helpers/, fixtures/
+├─ scripts/        manifest.ts, probe-api.mjs, mock-api.mjs, make-fixtures.ts, serve-test-pages.mjs
+├─ test-pages/     upload.html (every hand-off path)
+├─ docs/           manual-tests.md, agents/ (one guide per component + protocol, testing, build)
+├─ dist/           build output – "Load unpacked" (git-ignored)
+└─ AGENTS.md (agent guide), CLAUDE.md (@AGENTS.md), README.md, DESIGN.md
 ```
 
 Never committed: `node_modules/`, `dist/`, release zips, and anything containing
@@ -815,130 +780,22 @@ before it is tagged and pushed.
 | 9 | **Hardening & docs** | Edge cases, README complete per §14, release packaging | Every §14 item ticked; zip ready → `v1.0.0` |
 | 10 | **Offscreen lifecycle** | Lazy creation (via connect-fail → `ENSURE_OFFSCREEN`), close after `offscreenIdleTimeoutSec` (offscreen reports idle, service worker closes it), measurements | No offscreen document while idle; startup cost and memory saving recorded → `v1.1.0` |
 
-Sample PDFs: clean; one AWS key; secret on page 3 of 5; secret split across a
-line break; several secret types; PEM private key; Hebrew text with a key;
-encrypted; scanned image; ~20 MB. Generated by `scripts/make-fixtures.ts`
-with `pdf-lib` (dev dependency only); the encrypted and scanned-image samples
-are created once and committed as binaries.
+Sample PDFs are generated by `scripts/make-fixtures.ts` (hand-built PDF, no
+library): one/multi-page, multi-line, split token, special characters, empty
+page, encrypted, owner-password-only, no text. Large PDFs are built in memory
+by the tests (`docs/agents/testing.md`).
 
-**Who tests what:** automated tests run in the build and CI (§15). Tests against
-the real API (step 1, step 6) and real sites (step 8) are **run by the
-developer on their machine** – the API is not reachable from Claude's
-environment. `scripts/probe-api.mjs` reads the APP-ID from the environment
-variable `PSS_APP_ID` (never committed), runs the probes (sizes 4k–64k ASCII
-and Hebrew, invalid APP-ID, malformed body, burst for 429, PII-only / URL-only
-texts) and prints a summary **without echoing secrets or the APP-ID**; the
-output is pasted back and recorded in §5.
+**Who tests what:** automated tests run in CI (§15). Tests against the real
+API and real sites are **run by the developer** (D27); `scripts/probe-api.mjs`
+reads the APP-ID from `PSS_APP_ID` and never prints it or any secret.
 
 ### Planned commits
 
 `feat`/`fix` → `test` pairs share a number (a / b). Every commit builds and
 passes all tests.
 
-**Step 0 – repository & tooling**
-1. `chore: initialize repository with .gitignore and .gitattributes`
-2. `docs: add design document and observed API response fixtures`
-3. `docs: add agent guide (AGENTS.md, CLAUDE.md, docs/agents/)`
-4. `build: set up npm project with TypeScript, esbuild and Vitest (Node + browser mode, coverage thresholds)`
-5. a. `feat: add Manifest V3 skeleton with dev and release builds`
-   b. `test: verify both manifests – permissions, localhost only in dev, incognito, CSP, minimum Chrome version`
-6. `chore: enable Dependabot and run npm audit in the build`
-7. `ci: run type check, tests, coverage, audit and both builds on GitHub Actions`
-8. `docs: add README skeleton (setup, build, load unpacked, testing, future options)`
-→ create GitHub repo, `git push -u origin main`, tag `step-0`
-
-**Step 1 – API probing**
-1. `chore: add API probing script (APP-ID from env, no secrets in output)`
-2. `docs: record API probing results and set chunk defaults` (after the developer runs the script)
-3. `chore: add local mock API mirroring the observed behaviour`
-→ tag `step-1`
-
-**Step 2 – walking skeleton**
-1. a. `feat(shared): add settings model with defaults and validation`
-   b. `test(shared): cover defaults, validation and dev-only localhost API URL`
-2. a. `feat(shared): add safe logger that never outputs sensitive data`
-   b. `test(shared): logger redacts text, bodies, secrets and APP-ID`
-3. a. `feat(shared): define typed messages between contexts`
-   b. `test(shared): message validators accept valid and reject malformed messages`
-4. a. `feat(background): keep offscreen document alive with single-flight creation`
-   b. `test(background): add chrome.* fake; concurrent ensureOffscreen creates one document`
-5. a. `feat: pass settings to offscreen document via ready handshake and push`
-   b. `test: cover handshake, early jobs waiting and updates`
-6. a. `feat(background): reconcile content-script registration with the allow list`
-   b. `test(background): registers granted allow-listed sites only; idempotent; dev seed`
-7. a. `feat(shared): add BATCH_ACCEPTED and BATCH_DONE replies on the scan port`
-   b. `test(shared): reply validators accept valid and reject malformed replies`
-8. a. `feat(content): send selected files directly to the offscreen document over a port`
-   b. `test(content): cover port connect, self-healing ENSURE_OFFSCREEN retry and sender validation`
-9. a. `feat: show a basic notification for each received batch`
-   b. `test: offscreen → service worker SHOW_RESULT → notification`
-10. `docs: record verification of direct ports and message serialisation; add test page, local server and manual checklist`
-→ tag `step-2`
-
-**Step 3 – options & allow list**
-1. a. `feat(options): add options page for APP-ID, API URL and settings`
-   b. `test(options): cover loading, validation errors and saving`
-2. a. `feat(options): edit site allow list with per-site permission requests`
-   b. `test(options): cover pattern normalisation, permission grant/deny and saved list`
-3. a. `feat(background): trigger reconciliation on startup, list changes and permission changes`
-   b. `test(background): cover revoke in chrome://extensions, restart and list edits`
-4. a. `feat: open options page on install`
-   b. `test: options page opens on first install only`
-5. a. `feat: warn and log when notifications are blocked in Chrome`
-   b. `test: cover permission-level warning and log`
-→ tag `step-3`
-
-**Step 4 – hand-off detection**
-1. a. `feat(main-world): hook file input and DataTransfer file getters`
-   b. `test(main-world): browser-mode tests for inputs (attached, detached, shadow DOM), drop and paste`
-2. a. `feat(main-world): hook getAsFile, folder-drop entries and FileSystemFileHandle.getFile`
-   b. `test(main-world): cover items, OPFS file handles and entry hook logic`
-3. a. `feat(main-world): de-duplicate forwarded files with a WeakSet`
-   b. `test(main-world): repeated .files reads forward each file once`
-4. a. `feat(content): receive files over MessageChannel with buffering`
-   b. `test(content): cover channel handshake and early-file buffering`
-5. a. `feat(content): filter PDFs by magic bytes, mark oversized files, group into batches`
-   b. `test(content): cover PDF filter, oversized files sent without bytes, batching`
-→ tag `step-4`
-
-**Step 5 – extraction & job system**
-1. a. `feat(offscreen): extract text per page with pdf.js (isEvalSupported off)`
-   b. `test(offscreen): add fixture generator, sample PDFs and extraction tests`
-2. a. `feat(offscreen): report encrypted, invalid and text-less PDFs`
-   b. `test(offscreen): cover encrypted, invalid and text-less PDFs`
-3. a. `feat(offscreen): add job registry with admission control, queue cap and timeout`
-   b. `test(offscreen): cover queueing, QUEUE_FULL, too-large reports, timeout and job isolation`
-4. a. `feat(offscreen): limit parallel extractions and share one pdf.js worker`
-   b. `test(offscreen): cover extraction limit and worker reuse`
-→ tag `step-5`
-
-**Step 6 – scanning**
-1. a. `feat(scanner): split text at safe boundaries with overlap and page mapping`
-   b. `test(scanner): cover boundaries, PEM blocks, overlap, multi-byte text and page mapping`
-2. a. `feat(scanner): truncate text above maxTextChars and report partial scans`
-   b. `test(scanner): cover truncation and partial-scan status`
-3. a. `feat(scanner): parse API responses into findings`
-   b. `test(scanner): parse recorded API fixtures and malformed responses`
-4. a. `feat(scanner): call API with timeout and retries`
-   b. `test(scanner): cover API client with mocked fetch`
-5. a. `feat(scanner): shrink oversized chunks with bounded splitting`
-   b. `test(scanner): cover split on the observed "too large" response, shrink-only, floor and depth limit`
-6. a. `feat(scanner): add global API call limiter with round-robin across jobs`
-   b. `test(scanner): limit never exceeded across jobs; fair scheduling`
-7. a. `feat(scanner): aggregate, de-duplicate and mask findings`
-   b. `test(scanner): cover aggregation, de-duplication and masking`
-8. a. `feat: wire scan pipeline end to end`
-   b. `test: pipeline test with concurrent jobs and mocked API`
-→ tag `step-6`
-
-**Step 7 – notifications**
-1. a. `feat: add i18n message catalogue for notification texts`
-   b. `test: every message key used in code exists in the catalogue`
-2. a. `feat(background): show batch result notifications for all outcomes`
-   b. `test(background): cover secrets, partial, failed, QUEUE_FULL, too large, multi-file and file-name sanitising`
-3. a. `feat(background): add not-configured and interrupted notifications`
-   b. `test(background): cover not-configured click and SCAN_INTERRUPTED`
-→ tag `step-7`
+Steps 0–7: done – their commits are in the history (`git log step-6..step-7`
+etc.).
 
 **Step 8 – real-site testing**
 1. a. `fix: …` (one per issue found on real sites)
@@ -983,15 +840,13 @@ passes all tests.
 - Notifications only: no in-page UI, no details view. Future options: a
   details page opened by clicking the notification, and a recent-scans history
   in the extension popup.
-- **Text clean-up before chunking** (future feature, may only stay documented):
-  normalise non-breaking spaces, remove zero-width characters, re-join
-  hyphenated line breaks, collapse spacing that pdf.js inserts inside tokens.
-  Would improve detection of secrets broken by PDF layout.
-- (Done in step 10) Lazy offscreen creation and idle close.
-- OCR for scanned PDFs.
+- Secrets broken by PDF layout (hyphenation, line wrap inside a token) may be
+  missed. Future option (D14): text clean-up before chunking – normalise
+  non-breaking spaces, remove zero-width characters, re-join hyphenated line
+  breaks, collapse spacing pdf.js inserts inside tokens.
+- Offscreen document always open until step 10 (lazy creation, idle close).
+- OCR for scanned PDFs; other file types (DOCX, TXT…).
 - Automated end-to-end tests with Playwright (planned – see §15).
-- Secrets broken by PDF layout (hyphenation, line wrap inside a token) may be missed.
-- Other file types (DOCX, TXT…).
 - Event-listener safety net for detection (see §3) – decided at step 8.
 - Files a site deliberately hides from the hooks (out of scope by threat model).
 - A site on the allow list whose Chrome access was revoked or never granted is
@@ -1021,7 +876,7 @@ Decisions challenged before implementation (2026-10-14).
 | D9 | Scan on **hand-off**, alert wording "added to this site" | Scan only on actual network upload | Once the page holds the file it can upload it any time; network upload can't be observed reliably. Cost: a PDF selected then cancelled is still scanned. |
 | D10 | **Threat model**: accidental leaks only | Also defend against evasive sites | A malicious site can always evade client-side hooks; the target is user mistakes. |
 | D11 | Chunks end only at whitespace (paragraph > line > space); PEM blocks unbreakable; overlap 200 for context | Fixed-size cuts with large overlap to cover long secrets | Secrets are never split, so overlap stays small (fewer extra calls); PEM keys (~1.7–3.2k chars) stay whole. |
-| D12 | **Bounded** automatic shrinking when a chunk is cut short (reported `characters` < sent, or 413); default size set by probing (updated after step 1) | Fixed size only; adaptive grow-and-shrink | Robust to the unknown limit. Shrink-only, floor 500, bounded depth, never grows past configured size – no runaway behaviour. |
+| D12 | **Bounded** automatic shrinking when a chunk is cut short (reported `characters` < sent, or 413); default size set by probing (D34) | Fixed size only; adaptive grow-and-shrink | Robust to the unknown limit. Shrink-only, floor 500, bounded depth, never grows past configured size – no runaway behaviour. |
 | D13 | Text above `maxTextChars` (2M): **scan the first part and warn** | Refuse to scan | A partial scan still catches most leaks; the warning makes the gap explicit and the result is never reported as clean. |
 | D14 | Text clean-up before chunking: **future feature** | Add in step 2 | Keep v1 scope tight; documented in §12 and README future options. |
 | D15 | Verdict = `result.prompt.findings.Secrets` non-empty | `action` / `passed` / `violations` | `action` reflects the server-side policy across all detectors: Sensitive Data or Token Limitation set to block would cause false alarms, Secrets set to log would silently miss secrets. Findings are also needed for the alert content. |
@@ -1035,7 +890,7 @@ Decisions challenged before implementation (2026-10-14).
 | D23 | Oversized files reported via the batch (name + size only) | Content-script notice | Content script has no UI (D16); one path for all outcomes. |
 | D24 | Service worker is the **single owner** of content-script registration (`reconcile()`); options page only edits list + permissions | Options page registers, service worker re-syncs | One writer, idempotent, can't drift. |
 | D25 | Dev build adds `http://localhost/*` and seeds the allow list; release build doesn't | Manual permission grant during development | Test pages work without the options flow; release stays minimal (checked by test). |
-| D26 | `minimum_chrome_version` set (≈120, confirmed in step 0) | None | Offscreen, `getContexts`, registered MAIN-world scripts need recent Chrome. |
+| D26 | `minimum_chrome_version` 120 | None | Offscreen, `getContexts`, registered MAIN-world scripts need recent Chrome. |
 | D27 | Real-API and real-site testing **run by the developer**; probing script + fixture generator provided | Claude runs them | The API is not reachable from Claude's environment. |
 | D28 | v1 testing = **automated unit tests + manual checklist**; Playwright E2E planned for later | E2E in v1 | Keep v1 scope; E2E plan documented in §15 and README. |
 | D29 | **Vitest browser mode** (real Chromium) for page-level tests | jsdom | jsdom lacks `DataTransfer`, File System Access API and a real `FileList` – exactly what the hooks use. |
@@ -1113,7 +968,7 @@ for later (below).
 |---|---|---|---|
 | Static | Type check, both manifests (permissions, localhost only in dev, incognito, CSP, minimum Chrome version), dependency audit | `tsc --noEmit`, manifest test, `npm audit` | Build + CI |
 | Unit – Node | Chunker, page mapping, truncation, response parser (recorded fixtures), masking, aggregation, safe logger, settings validation, allow-list patterns, API limiter / round-robin, job registry, queue cap, timeouts, bounded splitting, notification text, file-name sanitising, i18n keys | Vitest (Node), fake timers, mocked `fetch` | Build + CI |
-| Unit – PDF extraction | pdf.js on generated sample PDFs: text per page, encrypted, no text layer, Hebrew, PEM key, ~20 MB | Vitest (Node) + pdf.js | Build + CI |
+| Unit – PDF extraction | pdf.js on generated sample PDFs: text per page, encrypted, owner-password-only, invalid, no text layer; large PDFs built in memory | Vitest (Node) + pdf.js | Build + CI |
 | Unit – browser | Hand-off hooks, MAIN ↔ content channel, WeakSet de-dup, PDF filter, batching – in **real Chromium** (jsdom lacks `DataTransfer`, File System Access API, real `FileList`). `FileSystemFileHandle` via OPFS; entry-chain hook logic (D36) with stand-ins (real behaviour: manual) | **Vitest browser mode** (Playwright provider, headless Chromium) | Build + CI |
 | Unit – wiring | Content script ↔ offscreen ↔ service worker: settings handshake, self-healing, registration reconcile, sender validation, notifications | Vitest + `tests/helpers/chrome-fake.ts` (in-memory `chrome.*`) | Build + CI |
 | Manual – real API | Size limit, error responses, rate limit, PII-only / URL-only texts | `scripts/probe-api.mjs` | **Developer** |
@@ -1126,10 +981,8 @@ for later (below).
 Chromium, type check, all Vitest projects with coverage, `npm audit`, dev and
 release builds.
 
-**Infrastructure:** Node.js LTS + npm; dev dependencies `typescript`,
-`esbuild`, `vitest`, `@vitest/browser-playwright`, `playwright`, `@vitest/coverage-v8`,
-`@types/chrome`, `pdf-lib` (none ship in the extension); Playwright Chromium;
-local scripts `serve-test-pages`, `mock-api`, `make-fixtures`, `probe-api`.
+**Infrastructure:** Node.js 24+ and npm; dev dependencies only for building
+and testing (`package.json`; none ship in the extension); Playwright Chromium.
 
 **Out of scope**
 - Quality of the vendor's detection (which secrets the API finds or misses) –

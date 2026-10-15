@@ -6,8 +6,9 @@ similar. The PDF's text is checked by the Prompt Security API; results appear
 as Chrome notifications. **Uploads are never blocked** – the extension only
 alerts.
 
-> **Status:** in development (v0.1.0). This README is a skeleton and is
-> completed in step 9 of the plan. Design and plan: [DESIGN.md](DESIGN.md).
+> **Status:** in development (v0.1.0) – scanning and notifications work;
+> real-site testing next. This README is completed in step 9 of the plan.
+> Design and plan: [DESIGN.md](DESIGN.md).
 
 ## Requirements
 
@@ -45,8 +46,17 @@ npx playwright install chromium   # browser for the test suite
 
 ## Configuration
 
-*Completed in step 3 (options page):* APP-ID, API URL, site allow list and all
-settings with their defaults.
+Open the options page (`chrome://extensions` → Details → *Extension options*;
+it also opens on first install):
+
+1. Enter your **APP-ID** (Prompt Security) and Save. The API URL defaults to
+   the EU endpoint.
+2. **Add the sites** whose PDFs should be checked (e.g. `mail.google.com`,
+   `*.slack.com`). Chrome asks for access to each site; nothing is scanned
+   until a site is added. Reload tabs already open on it.
+3. *Advanced settings* hold the limits (chunk size, timeouts, file size …);
+   each field shows its default. All settings and defaults:
+   [DESIGN.md §6](DESIGN.md).
 
 **Known Chrome behaviour – removing a site:** when you remove a site from the
 list, the extension gives Chrome's access to that site back
@@ -105,7 +115,7 @@ notification with the notes above.)
 |---|---|---|---|
 | No APP-ID entered yet | **PDF Secret Scanner isn't set up** | **Click to add your APP-ID.** | Opens the settings |
 | The scanning service rejected the APP-ID | **Couldn't scan report.pdf** | **Your APP-ID was rejected – check the extension settings.** | Opens the settings |
-| The scan stopped before a result (the extension's background page was restarted) | **The scan of report.pdf was interrupted** | **The scan was interrupted – the file was not checked.** | – |
+| The scan stopped before a result (the extension's scanning page was closed or restarted) | **The scan of report.pdf was interrupted** | **The scan was interrupted – the file was not checked.** | – |
 
 ### Reasons (error codes)
 
@@ -121,7 +131,7 @@ notification with the notes above.)
 | `API_HTTP_ERROR` | The scanning service returned an error – the file was not fully checked. | The API answered with an error status (e.g. 500, 429) after retries. |
 | `API_BAD_RESPONSE` | The scanning service gave an unexpected answer – the file was not fully checked. | The answer was not in the expected format. |
 | `API_UNAUTHORIZED` | Your APP-ID was rejected – check the extension settings. | Wrong or revoked APP-ID. |
-| `SCAN_INTERRUPTED` | The scan was interrupted – the file was not checked. | The background page stopped mid-scan. |
+| `SCAN_INTERRUPTED` | The scan was interrupted – the file was not checked. | The scanning page stopped mid-scan, or the scan failed unexpectedly. |
 | `SCAN_TIMEOUT` | The scan took too long and was stopped – the file was not fully checked. | Above *Time limit per file* (default 120 s). |
 | `TEXT_TRUNCATED` | Only the first X of Y characters were checked. | The text is longer than *Maximum text per file* (default 2,000,000). |
 | `CHUNK_TOO_LARGE` | Part of the text could not be scanned. | The service kept cutting a part short, even at the smallest size. |
@@ -272,8 +282,6 @@ with the extension loaded, local test pages and a mock API.
 - Incognito windows are not supported.
 - Secrets and PDF text are kept in memory only; never stored or logged.
 - Never commit your APP-ID.
-
-*Full details completed in step 9.*
 
 ## Future options
 

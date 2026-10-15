@@ -1,9 +1,9 @@
 # Manual tests
 
-Run before tagging a step. Automated tests cover the logic; these checks cover
-what only real Chrome shows: script injection, messaging between contexts and
-OS notifications. Extended in later steps (sources in step 4, real API in
-step 6, real sites in step 8).
+Run before tagging a step: what only real Chrome shows (script injection,
+messaging between contexts, OS notifications, real API, real sites). The logic
+is covered by automated tests. What each notification says: README
+"Notifications – what each one means".
 
 ## Preparation
 
@@ -11,95 +11,84 @@ step 6, real sites in step 8).
    unpacked** → `dist/` (or the reload icon if already loaded).
 2. `npm run serve:test-pages` → open **http://localhost:8080/upload.html**
    (`localhost`, not `127.0.0.1` – only `localhost` is on the dev allow list).
-3. Consoles you will need:
-   - **Service worker:** extension card → "service worker".
-   - **Offscreen document:** extension card → "Inspect views: offscreen.html".
-   - **Page:** DevTools on the test page, log level **Verbose** (debug lines
-     are hidden by default).
-4. Notifications enabled for Google Chrome in the OS (README → Requirements).
+3. `npm run mock-api`; Options → API URL `http://localhost:8787/api/protect`,
+   APP-ID `mock-app-id` → Save (from step 3 on).
+4. Consoles, log level **Verbose** (debug lines are hidden by default):
+   **service worker** and **offscreen document** (extension card → Inspect
+   views), **page** (DevTools on the test page).
+5. Notifications enabled for Google Chrome in the OS (README → Requirements).
+   No notification but no error → check Windows Settings → System →
+   Notifications (Chrome on, Do not disturb off) and the notification center
+   (Win+N).
 
-## Step 2 – walking skeleton
+Each batch logs `batch received { files: N }` in the offscreen console and
+`batch done { files: N }` on the page. PDFs: `tests/fixtures/`.
+
+## Step 2 – architecture
 
 | # | Do | Expect |
 |---|---|---|
-| 2.1 | Reload the extension | No errors on the extension card; the icon (document + magnifier) is shown. Service worker: `content scripts reconciled { allowed: 1, active: 1 }`. Offscreen: `offscreen document loaded`, `settings received`. |
-| 2.2 | Open the test page | Page console: `[PSS:content] content script loaded`. |
-| 2.3 | Section 1: pick one **PDF** (since step 4 only PDFs are sent) | Offscreen: `batch received { files: 1 }`. Page: `batch done { files: 1 }`. A notification **"PDF Secret Scanner (preview)" – "Received 1 file(s) from localhost:8080. Scanning is not implemented yet – nothing was checked."** |
-| 2.4 | Section 2: pick three PDFs | One notification, "Received 3 file(s)…". |
-| 2.5 | Offscreen console: `window.close()`, then pick a PDF | Page: `scan port not accepted, asking for the offscreen document`, then `batch done`. Service worker: `offscreen document created`. Notification shown. |
-| 2.6 | Release build: `npm run build`, reload, reload the test page | Service worker: `allowed: 0, active: 0`; no content-script line on the page; no notification. Rebuild with `npm run build:dev` afterwards. |
-| 2.7 | Serialisation check (DESIGN §2): in the **service worker** console run `chrome.runtime.onMessage.addListener((m) => { if (m?.probe) console.log(JSON.stringify(m)); })`; in the **offscreen** console run `chrome.runtime.sendMessage({ probe: 1, bytes: new Uint8Array([1, 2, 3]), buffer: new Uint8Array([1, 2, 3]).buffer })` | Service worker prints `{"probe":1,"bytes":{"0":1,"1":2,"2":3},"buffer":{}}` – bytes are JSON-serialised, so base64 is still needed. Anything else: record it, base64 may be droppable. |
-
-If no notification appears but the service worker shows no error, Windows is
-hiding it: check Settings → System → Notifications (Google Chrome on, Do not
-disturb off) and the notification center (Win+N).
+| 2.1 | Reload the extension | No errors on the card. Service worker: `content scripts reconciled { allowed: 1, active: 1 }`. Offscreen: `offscreen document loaded`, `settings received`. |
+| 2.2 | Open the test page | Page: `[PSS:content] content script loaded`. |
+| 2.3 | Section 2: three PDFs | One batch: `batch received { files: 3 }`, page `batch done { files: 3 }`. |
+| 2.4 | Offscreen console: `window.close()`, then pick a PDF | Page: `scan port not accepted, asking for the offscreen document`, then `batch done`. Service worker: `offscreen document created`. |
+| 2.5 | Release build (`npm run build`), reload, reload the test page | Service worker: `allowed: 0, active: 0`; no content-script line on the page. Rebuild with `npm run build:dev`. |
 
 ## Step 3 – options page and allow list
 
-Open the **options page** from `chrome://extensions` → extension card →
-Details → *Extension options*. Keep the **service worker** console open.
+Options page: `chrome://extensions` → Details → *Extension options*. Keep the
+service worker console open.
 
 | # | Do | Expect |
 |---|---|---|
-| 3.1 | Remove the extension, then **Load unpacked** `dist/` again (dev build) | The options page opens by itself. Yellow "Not set up yet" banner. Site list: `http://localhost/*`. No red banner. Help line about OS notifications under the site list. |
-| 3.2 | Reload the extension (reload icon) | **No** options tab opens. |
-| 3.3 | APP-ID `mock-app-id` → Save | "Saved."; yellow banner gone. Offscreen console: `settings updated { configured: true, … }`. Service worker: **no** new `content scripts reconciled` line. |
-| 3.4 | API URL `http://evil.com` → Save; reload the options page | Error under API URL; "Not saved…". After reload the old URL is shown (nothing stored). |
-| 3.5 | Advanced: Chunk size `abc` → Save | "Advanced settings" opens; "Chunk size must be a whole number". |
-| 3.6 | Restore defaults → Save | Defaults back; APP-ID unchanged (tick *Show* to see it). |
-| 3.7 | Add site `example.com` | Chrome asks for access to example.com → Allow. Listed as `*://example.com/*`; "Added … Reload tabs already open on it." Service worker: `content scripts reconciled { allowed: 2, active: 2 }` – **without** reloading the extension. |
-| 3.8 | Open `https://example.com`, page console (Verbose) | `[PSS:content] content script loaded`. Then run `const i = Object.assign(document.createElement('input'), { type: 'file' }); i.onchange = () => i.files; document.body.append(i);` (the page's code must read the file – since step 4 that is what triggers a scan), pick a **PDF** → notification "Received 1 file(s) from example.com …". |
-| 3.9 | Add `example.org` → **Deny** in Chrome's prompt | "Access to *://example.org/* was not granted – the site was not added." Not listed. |
-| 3.10 | Add `example.com` again; add `google` | "already on the list"; "not a site" with the hint. No Chrome prompt for either. |
-| 3.11 | `chrome://extensions` → Details → Site access: remove example.com | Service worker: `reconciled { allowed: 2, active: 1 }`. Reload example.com → no content-script line. (The options list still shows example.com – it is on the list, not granted; see 3.12.) |
-| 3.12 | Options page: Remove example.com, then add it again | Listed again; service worker `active: 2`. (Chrome may skip the prompt – README, known Chrome behaviour.) |
-| 3.13 | Remove example.com | Service worker `active: 1`; example.com no longer scanned. |
-| 3.14 | Restart Chrome; open the test page (`npm run serve:test-pages`) and pick a PDF | Notification as in step 2 – registration and settings survived the restart. |
-| 3.15 | *(Optional, if Chrome offers it on a notification)* turn off notifications for the extension | Red banner on the open options page at once; service worker warns `notifications are blocked in Chrome …`. Turn them on again → banner gone. |
+| 3.1 | Remove the extension, **Load unpacked** again (dev build) | Options page opens by itself; yellow "Not set up yet" banner; site list `http://localhost/*`; help line about OS notifications. |
+| 3.2 | Reload the extension | **No** options tab opens. |
+| 3.3 | APP-ID `mock-app-id` → Save | "Saved."; banner gone. Offscreen: `settings updated { configured: true, … }`; service worker: **no** new `reconciled` line. |
+| 3.4 | API URL `http://evil.com` → Save; reload the page | Error under API URL, "Not saved…"; after reload the old URL is back. |
+| 3.5 | Advanced: Chunk size `abc` → Save | Section opens; "Chunk size must be a whole number". |
+| 3.6 | Restore defaults → Save | Defaults back; APP-ID unchanged. |
+| 3.7 | Add site `example.com` → Allow in Chrome's prompt | Listed as `*://example.com/*`, "Reload tabs already open on it."; service worker `reconciled { allowed: 2, active: 2 }` without reloading the extension. |
+| 3.8 | On `https://example.com`, page console: `const i = Object.assign(document.createElement('input'), { type: 'file' }); i.onchange = () => i.files; document.body.append(i);` – pick a PDF | Content script loaded; offscreen `batch received { files: 1 }`. |
+| 3.9 | Add `example.org` → **Deny** | "…was not granted – the site was not added." |
+| 3.10 | Add `example.com` again; add `google` | "already on the list"; "not a site" with the hint; no Chrome prompt. |
+| 3.11 | `chrome://extensions` → Site access: remove example.com | Service worker `active: 1`; example.com no longer scanned (still listed – README known issue). |
+| 3.12 | Options: Remove example.com, add it again | Listed; `active: 2` (Chrome may skip the prompt – README). |
+| 3.13 | Remove example.com | `active: 1`. |
+| 3.14 | Restart Chrome; pick a PDF on the test page | `batch received` – registration and settings survived the restart. |
+| 3.15 | *(Optional)* turn off this extension's notifications in Chrome | Red banner on the open options page; service worker warns `notifications are blocked in Chrome …`. Turn them on again → banner gone. |
 
 ## Step 4 – hand-off detection
 
-Dev build loaded, test page open (`http://localhost:8080/upload.html`, reload it
-after rebuilding). Keep a few PDFs and a `.txt` file ready, and a folder with
-PDFs in a subfolder. Each action below is one batch → **one notification**
-("Received N file(s) from localhost:8080 …"); the page's own log shows what the
-"site" received.
+Keep a few PDFs, a `.txt` file and a folder with PDFs in a subfolder ready. The
+page's own log shows what the "site" received.
 
 | # | Do | Expect |
 |---|---|---|
-| 4.1 | Service worker console: `chrome.scripting.getRegisteredContentScripts().then((s) => console.log(s.map((x) => [x.id, x.world])))` | `[['pss-hooks','MAIN'], ['pss-content','ISOLATED']]` |
-| 4.2 | Section 1 – file input: a PDF | One notification, "Received 1 file(s)". |
-| 4.3 | Section 2 – several files: 2 PDFs + 1 `.txt` | **One** notification, "Received **2** file(s)". |
-| 4.4 | Section 3 – detached input: a PDF | One notification. |
-| 4.5 | Section 4 – closed shadow DOM input: a PDF | One notification. |
-| 4.6 | Section 5 – drag & drop: a PDF and a `.txt` together | One notification, "Received 1 file(s)". |
-| 4.7 | Section 5 – drag & drop **a folder** with PDFs, some in a subfolder | One notification counting **all** PDFs at every depth (D36 – lazy entry hooks). |
-| 4.8 | Section 6 – copy a PDF in the file manager, Ctrl+V on the page | One notification. |
-| 4.9 | Section 7 – showOpenFilePicker: a PDF | One notification. |
-| 4.10 | Any section: only a `.txt` | **No** notification (the page log still shows the file). |
-| 4.11 | Rename a `.txt` to `fake.pdf`, pick it | **No** notification – the content decides, not the name. |
-| 4.12 | Pick the same PDF again in section 1 | A new notification (a new selection is scanned again). |
-| 4.13 | Page console (Verbose) during 4.2 | `[PSS:content] batch from the page { files: 1, pdfs: 1 }`; no file names in any extension log line. |
-
-Oversized PDFs (above *Maximum PDF size*) are sent without bytes; the skeleton
-notification does not show it yet (step 7) – covered by automated tests.
+| 4.1 | Service worker: `chrome.scripting.getRegisteredContentScripts().then((s) => console.log(s.map((x) => [x.id, x.world])))` | `[['pss-hooks','MAIN'], ['pss-content','ISOLATED']]` |
+| 4.2 | Section 1 – file input: a PDF | `batch received { files: 1 }` |
+| 4.3 | Section 2 – 2 PDFs + 1 `.txt` | **One** batch, `files: 2` |
+| 4.4 | Section 3 – detached input; section 4 – closed shadow DOM | One batch each |
+| 4.5 | Section 5 – drop a PDF and a `.txt` | One batch, `files: 1` |
+| 4.6 | Section 5 – drop **a folder** with PDFs, some in a subfolder | One batch counting **all** PDFs at every depth (D36) |
+| 4.7 | Section 6 – copy a PDF in the file manager, Ctrl+V on the page | One batch |
+| 4.8 | Section 7 – showOpenFilePicker: a PDF | One batch |
+| 4.9 | Only a `.txt`; or a `.txt` renamed to `fake.pdf` | **No** batch (the content decides, not the name) |
+| 4.10 | The same PDF again in section 1 | A new batch (a new selection is scanned again) |
+| 4.11 | Page console during 4.2 | `[PSS:content] batch from the page { files: 1, pdfs: 1 }`; no file names in any extension log line. |
 
 ## Step 5 – extraction and job system
 
-Dev build loaded, test page open and reloaded. Offscreen console with log
-level **Verbose**: each batch logs `batch received { files: N }` and then
-`batch finished { outcomes: [...] }` – one code per file, in the order the
-page got them (`clean` here only means the text was read; nothing is checked
-before step 6). PDFs: `tests/fixtures/`.
+Each batch also logs `batch finished { outcomes: [...] }` – one code per file:
+`clean`, `secrets:N` or error codes.
 
 | # | Do | Expect (offscreen console) |
 |---|---|---|
 | 5.1 | Reload the extension | `offscreen document loaded`, `settings received`; no errors, no pdf.js warnings. |
-| 5.2 | Section 1: `one-page.pdf` | `outcomes: ['clean']`; notification as before. |
+| 5.2 | Section 1: `one-page.pdf` | `outcomes: ['clean']` |
 | 5.3 | Section 1: `encrypted.pdf` | `['PDF_ENCRYPTED']` |
 | 5.4 | Section 1: `no-text.pdf` | `['NO_TEXT_LAYER']` |
 | 5.5 | Section 1: `owner-password-only.pdf` | `['clean']` – opens without a password, so it is read. |
-| 5.6 | Section 2: all 9 fixture PDFs at once | **One** `batch received { files: 9 }` and one `batch finished` with 9 codes: `PDF_ENCRYPTED` and `NO_TEXT_LAYER` once each, the rest `clean`. |
+| 5.6 | Section 2: all 9 fixture PDFs at once | **One** `batch received { files: 9 }` and one `batch finished` with 9 codes (6.3). |
 | 5.7 | Offscreen DevTools → Sources → **Threads** pane (or the console's context drop-down) | Exactly **one** `pdf.worker.mjs` thread; still one after repeating 5.6. |
 | 5.8 | Section 1: a large real PDF of your own (many pages, several MB) | `['clean']` (or a PDF code), within a few seconds; no warnings. |
 | 5.9 | Options → Advanced: *Files waiting* 10 MB, *Maximum PDF size* ≥ 10 → Save. Section 2: PDFs of your own totalling > 10 MB (e.g. three of 4–5 MB) | The files that no longer fit → `QUEUE_FULL` (warning `queue full: file not scanned`), the others read. **Restore defaults** afterwards (APP-ID is kept). |
@@ -111,13 +100,8 @@ Job timeout, the extraction limit and aborting are covered by automated tests
 
 ## Step 6 – scanning
 
-Dev build loaded, test page open, offscreen console on **Verbose**. Each file
-logs `file scanned { pageCount, chunks, failedChunks, calls, findings, ms }`;
-each batch `batch finished { outcomes: [...] }` (`clean`, `secrets:N`, or
-error codes). The notification is still the step-2 skeleton (step 7).
-
-**Against the mock API:** `npm run mock-api` (port 8787), then Options → API
-URL `http://localhost:8787/api/protect`, APP-ID `mock-app-id` → Save.
+Each file logs `file scanned { pageCount, chunks, failedChunks, calls,
+findings, ms }`. Against the mock API (Preparation 3):
 
 | # | Do | Expect (offscreen console) |
 |---|---|---|
@@ -142,9 +126,7 @@ round-robin across jobs are covered by automated tests.
 
 ## Step 7 – notifications
 
-Dev build, mock API (`npm run mock-api`, API URL
-`http://localhost:8787/api/protect`, APP-ID `mock-app-id`), test page. What
-each notification says: README "Notifications – what each one means".
+Against the mock API (Preparation 3).
 
 | # | Do | Expect |
 |---|---|---|
@@ -156,3 +138,4 @@ each notification says: README "Notifications – what each one means".
 | 7.6 | Options: clear the APP-ID → Save; add `one-page.pdf` twice | **One** *PDF Secret Scanner isn't set up*; clicking it opens the settings and closes it |
 | 7.7 | APP-ID `wrong` → Save; `one-page.pdf` | *Couldn't scan one-page.pdf* – Your APP-ID was rejected…; clicking opens the settings |
 | 7.8 | APP-ID `mock-app-id`; restart the mock with `$env:MOCK_LATENCY_MS="15000"`; add `one-page.pdf`, then `window.close()` in the offscreen console within 15 s | *The scan of one-page.pdf was interrupted*. Afterwards `Remove-Item Env:MOCK_LATENCY_MS`, restart the mock |
+| 7.9 | Options → Advanced: *Maximum PDF size* 1 → Save; a PDF of your own > 1 MB | *Couldn't fully scan …* – The file is larger than the size limit. **Restore defaults** afterwards |

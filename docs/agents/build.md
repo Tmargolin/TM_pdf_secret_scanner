@@ -6,9 +6,8 @@ Design: `DESIGN.md` §8 (permissions), §9, §10, §15
 |---|---|
 | Build (esbuild) | `build.ts` (run by Node directly) → `dist/`; `npm run build` release, `npm run build:dev` dev |
 | Bundled entry points | ES modules: `background/service-worker`, `offscreen/offscreen`, `options/options` (+ `offscreen.html`, `options.html` copied next to them; pdf.js worker `pdfjs-dist/legacy/build/pdf.worker.mjs` copied to `offscreen/pdf.worker.mjs`); classic scripts (`iife`): `content/content` ← `src/content/index.ts`, `main-world/hooks` ← `src/main-world/index.ts` |
-| Manifest generation | `scripts/manifest.ts` (`createManifest`; dev adds `http://localhost/*`) |
-| Dev flag in code | `__DEV__` (esbuild `define`; declared in `src/globals.d.ts`) |
-| Manifest | `manifest.json` (template; dev adds `http://localhost/*` + allow-list seed) |
+| Manifest | `manifest.json` (template) → `scripts/manifest.ts` (`createManifest`; dev adds `http://localhost/*` to `host_permissions`) |
+| Dev flag in code | `__DEV__` (esbuild `define`; declared in `src/globals.d.ts`); dev defaults also seed the allow list with `http://localhost/*` (`settings.ts`) |
 | Strings | `_locales/en/messages.json` |
 | Icons | `icons/icon-{16,32,48,128}.png` → `dist/icons/` (manifest `icons`; notifications use 128) |
 | CI | `.github/workflows/ci.yml` |

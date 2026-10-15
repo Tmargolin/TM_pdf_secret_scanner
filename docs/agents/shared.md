@@ -1,6 +1,7 @@
 # Shared modules
 
-Files: `src/shared/settings.ts`, `messages.ts`, `types.ts`, `safe-logger.ts`, `scan-port.ts`, `notification-permission.ts`
+Files: `src/shared/settings.ts`, `messages.ts`, `types.ts`, `safe-logger.ts`,
+`scan-port.ts`, `notification-permission.ts`, `i18n.ts`
 Design: `DESIGN.md` §4 (result model), §6, §8
 
 | Module | Holds |
@@ -14,8 +15,8 @@ Design: `DESIGN.md` §4 (result model), §6, §8
 | `i18n.ts` | `MESSAGES` (every text key the code uses → number of substitutions; mirrors `_locales/en/messages.json`), `MessageKey`, `GetMessage`, `errorMessageKey(code)` → `error_<CODE>` |
 
 ## Rules
-- New setting: add to `settings.ts` (default + validation), `DESIGN.md` §6,
-  README defaults, options page.
+- New setting: add to `settings.ts` (default + range), `DESIGN.md` §6,
+  options page (`src/options/form.ts`).
 - New error code: add to `types.ts`, its reason `error_<CODE>` in `_locales/en/messages.json` and in `MESSAGES` (`i18n.ts`) – typecheck fails until both exist.
 - New text: key in `_locales/en/messages.json` and in `MESSAGES` (`i18n.ts`) with its number of substitutions; read only through `GetMessage`.
 - `console.*` is not used outside `safe-logger.ts`.

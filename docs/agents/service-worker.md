@@ -23,8 +23,7 @@ Design: `DESIGN.md` §2, §3.1, §7
 - Accept `SHOW_RESULT` / `OFFSCREEN_READY` only from the offscreen document URL;
   `ENSURE_OFFSCREEN` / `SCAN_INTERRUPTED` only from content scripts.
 - Only this context registers content scripts.
-- Notification texts from `_locales/en/messages.json`; file names truncated to
-  60 chars, control/bidi chars stripped; site = `port.sender` origin.
+- Notification texts only via `GetMessage` (`src/shared/i18n.ts`).
 
 ## Tests
 `tests/unit/` with `chrome-fake`.

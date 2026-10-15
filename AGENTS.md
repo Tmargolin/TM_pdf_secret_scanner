@@ -47,8 +47,8 @@ service worker → `chrome.notifications`
 
 ## Commands
 `npm run build` · `build:dev` · `typecheck` · `test` · `test:coverage` ·
-`serve:test-pages` · `mock-api` · `node scripts/probe-api.mjs` (needs
-`PSS_APP_ID`; developer only). Available from step 0 / step 1.
+`serve:test-pages` · `mock-api` · `fixtures` · `audit` ·
+`node scripts/probe-api.mjs` (needs `PSS_APP_ID`; developer only).
 
 ## Where to look
 | Task | Read |
@@ -60,4 +60,5 @@ service worker → `chrome.notifications`
 | Jobs, limits, extraction | `offscreen.md` |
 | Chunking, API calls, findings | `scanner.md` |
 | Notifications, script registration | `service-worker.md` |
+| Texts (i18n), error codes | `shared.md` |
 | Tests, fixtures, fakes | `testing.md` |
