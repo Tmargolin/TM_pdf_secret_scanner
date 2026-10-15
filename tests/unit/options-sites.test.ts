@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
+  addedMessage,
   addSite,
   chromePermissionsApi,
   normalizeSiteInput,
   overlaps,
-  removeSite,
   type PermissionsApi,
+  removedMessage,
+  removeSite,
 } from '../../src/options/sites.ts';
 import { createLogger, type LogLevel } from '../../src/shared/safe-logger.ts';
 import { DEV_SEED_SITE, getDefaultSettings, STORAGE_KEY, type Settings, type SettingsStorage } from '../../src/shared/settings.ts';
@@ -218,5 +220,17 @@ describe('chromePermissionsApi (the real chrome.permissions calls)', () => {
     await removeSite(MAIL, deps);
     expect(fake.grantedOrigins).toEqual([]);
     expect((fake.storageData[STORAGE_KEY] as Settings).allowedSites).toEqual([]);
+  });
+});
+
+describe('messages after a change (open tabs keep their state until reloaded)', () => {
+  it('adding: tabs already open start being scanned only after a reload', () => {
+    expect(addedMessage('*://mail.google.com/*')).toBe('Added *://mail.google.com/*. Reload tabs already open on it to start scanning there.');
+  });
+
+  it('removing: tabs still open keep being scanned until reloaded', () => {
+    expect(removedMessage('*://mail.google.com/*')).toBe(
+      'Removed *://mail.google.com/*. Tabs still open on it are scanned until you reload them.',
+    );
   });
 });
