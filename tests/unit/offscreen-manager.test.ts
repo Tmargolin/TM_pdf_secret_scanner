@@ -16,6 +16,9 @@ function recordingLogger() {
   return { log, lines };
 }
 
+/** The close half of OffscreenApi, for fakes that only test creation. */
+const NO_CLOSE = { currentDocumentId: async () => null, closeDocument: async () => {} };
+
 /** An OffscreenApi fake: creation takes one macrotask, like a real page load. */
 function fakeApi(options: { exists?: boolean } = {}) {
   let exists = options.exists ?? false;
@@ -31,6 +34,7 @@ function fakeApi(options: { exists?: boolean } = {}) {
       if (exists) throw new Error('Only a single offscreen document may be created.');
       exists = true;
     },
+    ...NO_CLOSE,
   };
   return { api, calls, remove: () => void (exists = false) };
 }
@@ -71,6 +75,7 @@ describe('createOffscreenManager', () => {
   it('treats "only a single offscreen document" as success (race with another creator)', async () => {
     const { log, lines } = recordingLogger();
     const api: OffscreenApi = {
+      ...NO_CLOSE,
       hasDocument: async () => false,
       createDocument: async () => {
         throw new Error('Only a single offscreen document may be created.');
@@ -85,6 +90,7 @@ describe('createOffscreenManager', () => {
     let fail = true;
     let created = 0;
     const api: OffscreenApi = {
+      ...NO_CLOSE,
       hasDocument: async () => false,
       createDocument: async () => {
         if (fail) throw new Error('boom');
@@ -103,6 +109,7 @@ describe('createOffscreenManager', () => {
 
   it('rejects when something other than an Error is thrown', async () => {
     const api: OffscreenApi = {
+      ...NO_CLOSE,
       hasDocument: async () => false,
       createDocument: async () => {
         throw 'not an Error object';

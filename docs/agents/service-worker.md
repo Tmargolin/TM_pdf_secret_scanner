@@ -8,7 +8,7 @@ Design: `DESIGN.md` §2, §3.1, §7
 ## Responsibilities
 | Module | Does | Triggers |
 |---|---|---|
-| `offscreen-manager.ts` | `ensureOffscreen()` single-flight (`runtime.getContexts`); "only a single offscreen document" error = success | `ENSURE_OFFSCREEN` only (content scripts only; reply `{ ok }`) – lazy creation (D41): never at start-up, install or browser start |
+| `offscreen-manager.ts` | One queue for create and close, in arrival order. `ensureOffscreen()`: create if missing (`runtime.getContexts`); concurrent ensures with nothing queued after them share one creation; "only a single offscreen document" error = success. `closeOffscreen(documentId)`: close only if the current document is the one that reported idle (`sender.documentId`); none → nothing; failure → warning (the document resumes after its grace period) | `ENSURE_OFFSCREEN` (content scripts only; reply `{ ok }`) – lazy creation (D41): never at start-up, install or browser start. `OFFSCREEN_IDLE` (offscreen only) → `closeOffscreen` (D42) |
 | `settings-bridge.ts` | Reply to `OFFSCREEN_READY` (offscreen sender only) with `SETTINGS_UPDATED`; push `SETTINGS_UPDATED` when `settings` changes in `storage.local` (no document → skipped); registers the APP-ID with the safe logger | `OFFSCREEN_READY`, `storage.onChanged` |
 | `script-registry.ts` | `reconcile()`: register hooks (`pss-hooks`, `main-world/hooks.js`, MAIN) + content script (`pss-content`, `content/content.js`, ISOLATED), same matches for sites in `allowedSites` **and** granted (`permissions.contains`); none → unregister; runs chained, never rejects | `onInstalled`, `onStartup`, `permissions.onAdded/onRemoved`, `storage.onChanged` when `allowedSites` changed (`allowListChanged`) |
 | `notifications.ts` | `createNotifier(api, log)`: `showResult(SHOW_RESULT)`, `showInterrupted(SCAN_INTERRUPTED)` → `chrome.notifications.create` for each spec (icon `chrome.runtime.getURL('icons/icon-128.png')` – never relative; `priority: 2`, `requireInteraction: true`); refused → logged, never throws. `onClicked(id)`: `opensSettings(id)` → `openOptionsPage()` + clear | `SHOW_RESULT` (offscreen only), `SCAN_INTERRUPTED` (content scripts only), `notifications.onClicked` |
@@ -20,7 +20,7 @@ Design: `DESIGN.md` §2, §3.1, §7
   (`src/shared/notification-permission.ts`). OS-level blocking is not detectable.
 - `onInstalled` with reason `install` (first install only) → `runtime.openOptionsPage()`.
 - Hold no scan state; every handler is a short event.
-- Accept `SHOW_RESULT` / `OFFSCREEN_READY` only from the offscreen document URL;
+- Accept `SHOW_RESULT` / `OFFSCREEN_READY` / `OFFSCREEN_IDLE` only from the offscreen document URL;
   `ENSURE_OFFSCREEN` / `SCAN_INTERRUPTED` only from content scripts.
 - Only this context registers content scripts.
 - Notification texts only via `GetMessage` (`src/shared/i18n.ts`).

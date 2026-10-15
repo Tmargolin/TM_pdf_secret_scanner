@@ -83,6 +83,13 @@ chrome.runtime.onMessage.addListener((raw, sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === 'OFFSCREEN_IDLE' && isFromOffscreen(sender, extensionId, chrome.runtime.getURL(OFFSCREEN_PATH))) {
+    // The document is idle and already rejects new batches (D42). Close exactly
+    // that document; a content script asking meanwhile waits in the queue.
+    void offscreen.closeOffscreen(sender.documentId);
+    return false;
+  }
+
   if (message?.type === 'SHOW_RESULT' && isFromOffscreen(sender, extensionId, chrome.runtime.getURL(OFFSCREEN_PATH))) {
     void notifier.showResult(message);
     return false; // display only, no reply
