@@ -3,12 +3,18 @@
 A Chrome extension (Manifest V3) that warns you when a PDF you add to a website
 on your allow list contains secrets – API keys, tokens, private keys and
 similar. The PDF's text is checked by the Prompt Security API; results appear
-as Chrome notifications. **Uploads are never blocked** – the extension only
-alerts.
+as operating-system notifications. **Uploads are never blocked** – the
+extension only alerts.
 
-> **Status:** in development (v0.1.0) – scanning and notifications work;
-> real-site testing next. This README is completed in step 9 of the plan.
-> Design and plan: [DESIGN.md](DESIGN.md).
+> **Status:** feature-complete for v1 – detection, scanning and notifications
+> work and were tested on Gmail, Google Drive, ChatGPT and LinkedIn.
+> Design, decisions and plan: [DESIGN.md](DESIGN.md).
+
+**How it works, in one line:** the browser hands a file to the site's code →
+the extension notices the `File` → if it is a PDF on an allow-listed site, its
+text is extracted with [pdf.js](https://mozilla.github.io/pdf.js/) and sent to
+the Prompt Security API in parts → if a secret is found (or the file could not
+be fully checked), a notification tells you.
 
 ## Requirements
 
@@ -33,16 +39,29 @@ npx playwright install chromium   # browser for the test suite
 
 ## Build
 
+**Release build – use this one:**
+
+```powershell
+npm run package
+```
+
+It builds the release into `dist/`, checks it (manifest version matches
+`package.json`, no localhost access, no source maps, every file the extension
+loads is present) and zips it to `release/pdf-secret-scanner-<version>.zip`.
+If a check fails, it lists the problems and writes no zip.
+
+Other builds (development and checks only):
+
 | Command | Output |
 |---|---|
-| `npm run build` | Release build in `dist/` |
-| `npm run build:dev` | Development build in `dist/` – additionally allows `http://localhost` (local test pages, mock API) |
-| `npm run package` | Release build, checked (version, no localhost, no source maps, all files) and zipped to `release/pdf-secret-scanner-<version>.zip` |
+| `npm run build` | Release build in `dist/`, without the checks and the zip |
+| `npm run build:dev` | Development build in `dist/` – additionally allows `http://localhost` (local test pages, mock API). Not for use on real sites. |
 
 ## Load in Chrome
 
 1. Open `chrome://extensions` and turn on **Developer mode**.
-2. **Load unpacked** → select the `dist` folder.
+2. **Load unpacked** → select the `dist` folder after `npm run package`
+   (or the folder you unpacked the release zip into).
 3. After rebuilding, click the reload icon on the extension card.
 
 ## Configuration
@@ -53,8 +72,10 @@ it also opens on first install):
 1. Enter your **APP-ID** (Prompt Security) and Save. The API URL defaults to
    the EU endpoint.
 2. **Add the sites** whose PDFs should be checked (e.g. `mail.google.com`,
-   `*.slack.com`). Chrome asks for access to each site; nothing is scanned
-   until a site is added.
+   `*.example.com`). The list is **empty by default – nothing is scanned
+   until you add a site.** Chrome asks for access to each site you add; a
+   site is scanned only when it is on the list **and** access is granted.
+3. *Advanced settings* hold the limits (below); each field shows its default.
 
 **Reload open tabs after changing the list.** Adding or removing a site takes
 effect in a tab only when the tab is (re)loaded: a site you add is not scanned
@@ -62,9 +83,30 @@ in tabs that were already open, and a site you remove is still scanned in tabs
 that stay open, until you reload them. (Chrome injects the extension's scripts
 when a page loads; changing the list cannot add them to, or remove them from,
 a page that is already running.)
-3. *Advanced settings* hold the limits (chunk size, timeouts, file size …);
-   each field shows its default. All settings and defaults:
-   [DESIGN.md §6](DESIGN.md).
+
+**Upload frames from another site need their own entry.** If a site uploads
+through an embedded frame from a different origin, that origin must be added
+to the list as well.
+
+### Settings and defaults
+
+| Setting | Default | Allowed | Notes |
+|---|---|---|---|
+| APP-ID | *(empty)* | | Required; nothing is checked without it |
+| API URL | `https://eu.prompt.security/api/protect` | `https://` on the Prompt Security host | Dev builds also accept `http://localhost:<port>` |
+| Sites to protect | *(empty)* | Site patterns | Each needs Chrome's permission |
+| Chunk size | 32,000 characters | 500–50,000 | The text is sent in parts of this size |
+| Chunk overlap | 200 characters | 0–2,000 | Text repeated between parts, for context |
+| Maximum request size | 65,536 bytes | 8,192–262,144 | UTF-8 size of one request body |
+| Maximum text per file | 2,000,000 characters | 10,000–10,000,000 | Longer texts: the first part is checked, with a warning |
+| Parallel API requests | 4 | 1–16 | Across all scans |
+| Parallel PDF extractions | 2 | 1–4 | PDFs read at the same time |
+| Files in progress | 60 MB | 10–500 | Total size being processed; more files wait |
+| Files waiting | 200 MB | 10–1,000 | Total size received and not finished; above it → `QUEUE_FULL` |
+| Time limit per file | 120,000 ms | 10,000–600,000 | Counted from when the file starts being processed |
+| Time limit per request | 15,000 ms | 1,000–120,000 | |
+| Retries per request | 2 | 0–5 | After network errors, timeouts, 429 and 5xx, with growing pauses |
+| Maximum PDF size | 25 MB | 1–45 | Files travel in one message (Chrome's 64 MB limit) |
 
 **Known Chrome behaviour – removing a site:** when you remove a site from the
 list, the extension gives Chrome's access to that site back
@@ -145,7 +187,23 @@ notification with the notes above.)
 | `CHUNK_TOO_LARGE` | Part of the text could not be scanned. | The service kept cutting a part short, even at the smallest size. |
 | `QUEUE_FULL` | Too many files at once – this file was not checked. Try again in a moment. | More files waiting than *Files waiting* allows (default 200 MB). |
 
-## How uploads are detected – hooks in the page's MAIN world
+## Design choices
+
+Three choices shape the whole extension. None of them is the obvious first
+idea; each is explained below with what it costs. All decisions, with the
+alternatives that were rejected: [DESIGN.md §13](DESIGN.md).
+
+```
+web page   hooks (MAIN world) ──MessageChannel──▶ content script (isolated world)
+                                                      │ port, file bytes
+                                                      ▼
+extension  offscreen document: jobs, pdf.js, chunking, API calls, findings ──▶ Prompt Security API
+                                                      │ masked result
+                                                      ▼
+           service worker ──▶ chrome.notifications ──▶ operating-system notification
+```
+
+### 1. Detection runs in the page's MAIN world
 
 > **The detection code runs inside the web page's own JavaScript world
 > (Chrome's `MAIN` world), not in the extension's usual isolated world.
@@ -211,6 +269,149 @@ prototypes the site actually uses.
   (DESIGN.md §8). The site can never read the APP-ID, scan results or
   notifications.
 
+### 2. Alerts are operating-system notifications, not shown in the page
+
+**What it does.** Every alert is a Chrome notification
+(`chrome.notifications`), which Chrome hands to the operating system – on
+Windows it appears as a Windows notification and stays in the notification
+center. The extension never draws anything inside a web page.
+
+**Why.**
+- **It works in every case.** The result arrives seconds after the file was
+  added. By then the user may have sent the mail, the page may have
+  navigated, the upload may have happened in a small iframe, or the tab may
+  be closed. An in-page banner would have nowhere to appear in most of these
+  cases; a system notification appears in all of them, the same way.
+- **The page never sees the result.** Anything drawn in a page can be read,
+  hidden or covered by the page's own code. With system notifications, the
+  findings (masked secrets, file names) never enter the page at all – a site
+  cannot read them, suppress them or fake them.
+- **One mechanism.** A banner with fallbacks (top frame, then notification)
+  would mean several code paths and several looks for the same alert.
+
+**What it costs.**
+- **It depends on the operating system's settings.** If notifications for
+  Chrome are off in Windows, or Do not disturb / Focus Assist is on, the
+  alert is hidden or only goes to the notification center. Chrome cannot
+  tell the extension when the OS blocks it, so this is listed as a
+  requirement. Blocking *inside Chrome* is detected and the options page
+  warns about it.
+- **Short text.** The OS shortens long messages, so a notification shows at
+  most three findings and a short reason.
+- **Notifications can stay in the OS history and on the lock screen** – one
+  reason why secret values are always masked.
+
+### 3. Almost all the logic runs in the offscreen document
+
+**What it does.** A Manifest V3 extension has no permanent background page.
+Its parts are the **service worker** (background events), **content scripts**
+(inside web pages) and, optionally, an **offscreen document** – a hidden
+extension page. Here the offscreen document does all the scan work: the job
+queue and limits, PDF parsing with pdf.js, chunking, API calls, reading the
+findings and masking them. The content script only passes the file's bytes
+to it; the service worker only creates it, passes it the settings and shows
+the final notification.
+
+**Why not the content script** (inside the web page):
+- The API call would be made from the page's process and is subject to the
+  page's cross-origin rules; the APP-ID would have to be there too.
+- pdf.js would be loaded into every page of every allow-listed site, and
+  parsing a large PDF would slow down the page the user is working in.
+- A scan would die when the tab is closed – right after "upload and leave".
+
+**Why not the service worker** (the usual MV3 background):
+- **Chrome stops the service worker** when it has been idle for about 30
+  seconds, and the extension cannot prevent it. A scan of a large PDF with
+  several API calls and retries could be cut off in the middle and its result
+  lost.
+- pdf.js needs a Web Worker to parse PDFs; a service worker cannot start one.
+
+**Why the offscreen document fits.** Its lifetime is controlled by the
+extension, not by Chrome's idle rules, so a running scan is never cut off. It
+is a normal page, so pdf.js gets its Web Worker. And all state – jobs,
+queues, limits, the API-call round-robin between files – lives in **one**
+place, with no coordination across contexts. Because the service worker holds
+no scan state, Chrome can stop it at any time without losing anything; it is
+woken by single short messages (create the document, read settings, show a
+notification).
+
+**What it costs.**
+- Memory while the document is open (about 15–30 MB). In v1 it stays open
+  while the extension runs; creating it on demand and closing it when idle is
+  planned for v1.1.
+- An offscreen document can use only `chrome.runtime`: it cannot read
+  `chrome.storage` (the service worker sends it the settings) and cannot show
+  notifications (it sends the result to the service worker).
+- File bytes travel from the content script as base64 text, because
+  extension messages are JSON. That is why the maximum PDF size is 45 MB
+  (Chrome's 64 MB message limit).
+
+## Privacy and security
+
+**Threat model.** The extension protects you from **accidentally** giving a
+website a PDF that contains secrets. It is not a defence against a website
+that deliberately evades it: such a site can undo the hooks and hide its own
+files. A hostile site can never read the APP-ID, scan results or
+notifications.
+
+**What leaves your machine**
+- The **full text** of every PDF added to an allow-listed site is sent to the
+  Prompt Security API (EU endpoint by default). This includes a PDF you
+  select and then cancel: once the page holds the file, it could upload it at
+  any time.
+- How Prompt Security retains or logs this text is **unknown**; its answers
+  indicate that requests are logged.
+- No analytics or telemetry of our own.
+
+**On your machine**
+- The **APP-ID** is stored unencrypted in the Chrome profile
+  (`chrome.storage.local`). Never commit it anywhere.
+- PDF text and secret values are kept **in memory only**, for the time of the
+  scan; they are never stored or logged. Notifications show secrets masked
+  (first 4 and last 2 characters, or `••••••` below 12 characters).
+- **Incognito windows are not supported** in this version.
+- File names in notifications come from the website: they are shortened to
+  60 characters and control and text-direction characters are removed. The
+  site name shown comes from Chrome, not from the page.
+
+**Hardening**
+- pdf.js parses untrusted files with extension privileges: version pinned
+  (6.4.299), `eval` disabled (`isEvalSupported: false`), Chrome's default
+  extension CSP (no remote code, no `eval`). `npm audit` runs in CI;
+  Dependabot is enabled.
+- One runtime dependency (pdf.js), committed lockfile, no remotely loaded
+  code. Release builds contain no localhost access and no source maps
+  (checked by `npm run package`).
+- Messages are accepted only from the expected parts of the extension and
+  are type- and size-checked; web pages cannot message the extension.
+
+**Known, not handled in this version**
+- A hostile page could flood the extension with files (API quota, CPU,
+  notifications); there is no per-tab rate limit.
+- Enterprise deployment via managed storage (`chrome.storage.managed`) is not
+  supported.
+
+## Known limitations
+
+- **Alerts only** – an upload is never blocked. A site that uploads
+  immediately may have sent the file before the alert appears.
+- **API behaviour:** the API silently stops checking very long texts
+  (somewhere between 128,000 and 256,000 characters) while still answering
+  "clean". The extension therefore sends the text in parts of 32,000
+  characters and treats an answer that reports fewer characters than were
+  sent as "cut short" – the part is split and sent again, down to 500
+  characters (`CHUNK_TOO_LARGE`).
+- **Which secret types are detected depends on Prompt Security.** In tests,
+  AWS keys were detected reliably; other types depend on the vendor.
+- Only the API's *Secrets* findings are used; other detectors (e.g. sensitive
+  data) are ignored.
+- Secrets broken by the PDF's layout (hyphenation, a line break inside a key)
+  may be missed.
+- Scanned PDFs without a text layer are not checked (no OCR); only PDFs are
+  checked.
+- Only allow-listed sites are protected; open tabs need a reload after the
+  list changes.
+
 ## Testing
 
 | Command | What it runs |
@@ -222,8 +423,7 @@ prototypes the site actually uses.
 
 CI (GitHub Actions) runs all of the above plus both builds on every push.
 
-Manual tests (real Chrome, OS notifications; later the real API and real
-websites) follow [docs/manual-tests.md](docs/manual-tests.md). They use a local
+Manual tests (real Chrome, OS notifications, the real API and real websites) follow [docs/manual-tests.md](docs/manual-tests.md). They use a local
 test page with the **dev build**:
 
 | Command | What it runs |
@@ -283,13 +483,23 @@ with the extension loaded, local test pages and a mock API.
 - *Needed for a future fix:* none unless the port behaviour changes; a test
   would need a port fake that breaks Chrome's rules.
 
-## Privacy and security (summary)
+## Development
 
-- The full text of PDFs added to allow-listed sites is sent to the Prompt
-  Security API. Vendor-side retention is unknown.
-- Incognito windows are not supported.
-- Secrets and PDF text are kept in memory only; never stored or logged.
-- Never commit your APP-ID.
+- **Dev build** (`npm run build:dev`): also allows `http://localhost`, seeds
+  the allow list with the local test pages and accepts an
+  `http://localhost:<port>` API URL. The release build does neither (checked
+  by tests and by `npm run package`).
+- **Local test pages** (`npm run serve:test-pages`) and a **mock API**
+  (`npm run mock-api`) let you run the whole flow without the real API – see
+  [docs/manual-tests.md](docs/manual-tests.md).
+- **Sample PDFs** are generated by `npm run fixtures`.
+- **Probing the real API** (developer only, needs your APP-ID; the APP-ID,
+  texts and secret values are never printed):
+
+  ```powershell
+  $env:PSS_APP_ID = "<your APP-ID>"
+  node scripts/probe-api.mjs
+  ```
 
 ## Future options
 

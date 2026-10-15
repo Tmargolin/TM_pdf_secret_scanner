@@ -928,48 +928,48 @@ Decisions challenged before implementation (2026-10-14).
 Created in step 0 (skeleton), completed in step 9. Every item below must be in
 the README:
 
-- [ ] Install, build, load unpacked; configuration (APP-ID, API URL) and all
+- [x] Install, build, load unpacked; configuration (APP-ID, API URL) and all
       setting defaults (§6)
-- [ ] **Privacy notice:** the full text of every PDF handed to a site is sent to
+- [x] **Privacy notice:** the full text of every PDF handed to a site is sent to
       Prompt Security (EU endpoint); this includes files selected and then
       cancelled
-- [ ] **API behaviour:** silently stops scanning very long texts (why chunks are
+- [x] **API behaviour:** silently stops scanning very long texts (why chunks are
       32k), and secret types detected depend on the vendor (§5)
-- [ ] **Vendor data handling:** retention/logging on the vendor side is unknown;
+- [x] **Vendor data handling:** retention/logging on the vendor side is unknown;
       responses indicate requests are logged
-- [ ] **Incognito windows are not supported** in this version
-- [ ] APP-ID is stored unencrypted in the Chrome profile; never commit it
-- [ ] Enterprise deployment via managed storage is **not supported** – possible
+- [x] **Incognito windows are not supported** in this version
+- [x] APP-ID is stored unencrypted in the Chrome profile; never commit it
+- [x] Enterprise deployment via managed storage is **not supported** – possible
       future feature
-- [ ] Secret values and PDF text are kept in memory only, never stored or
+- [x] Secret values and PDF text are kept in memory only, never stored or
       logged; masking rule for notifications
-- [ ] pdf.js hardening (eval disabled, strict CSP, pinned version, npm audit,
+- [x] pdf.js hardening (eval disabled, strict CSP, pinned version, npm audit,
       Dependabot)
-- [ ] **DoS:** a hostile page could flood the extension with files; no per-tab
+- [x] **DoS:** a hostile page could flood the extension with files; no per-tab
       rate limit in this version
-- [ ] File names in notifications come from the website (truncated and
+- [x] File names in notifications come from the website (truncated and
       sanitised); the site name comes from Chrome
-- [ ] Dependencies: one runtime dependency (pdf.js), lockfile committed, no
+- [x] Dependencies: one runtime dependency (pdf.js), lockfile committed, no
       remote code
-- [ ] No analytics or telemetry
-- [ ] **Site allow list:** empty by default (nothing scanned), how to add sites,
+- [x] No analytics or telemetry
+- [x] **Site allow list:** empty by default (nothing scanned), how to add sites,
       per-site permission prompt, reload already-open tabs, iframe origins must
       be added separately
-- [ ] Threat model: protects against accidental leaks, not evasive sites
-- [ ] **Detection runs in the page's MAIN world** – what the hooks do, why the
+- [x] Threat model: protects against accidental leaks, not evasive sites
+- [x] **Detection runs in the page's MAIN world** – what the hooks do, why the
       isolated world cannot work, and what that implies (no `chrome.*`, channel,
       visible to the page)
-- [ ] Known gaps in test coverage: the scenario not covered and what a future
+- [x] Known gaps in test coverage: the scenario not covered and what a future
       test needs
-- [ ] OS notification settings (Windows notifications / Focus Assist)
-- [ ] Minimum Chrome version
-- [ ] Development: `build:dev`, `serve:test-pages`, `mock-api` (dev builds accept an
+- [x] OS notification settings (Windows notifications / Focus Assist)
+- [x] Minimum Chrome version
+- [x] Development: `build:dev`, `serve:test-pages`, `mock-api` (dev builds accept an
       `http://localhost` API URL; release builds don't), fixture generator,
       running `probe-api.mjs` with `PSS_APP_ID`
-- [ ] Testing: how to run the tests, coverage thresholds, the manual checklist,
+- [x] Testing: how to run the tests, coverage thresholds, the manual checklist,
       what is out of scope, and the **plan for future end-to-end tests with
       Playwright**
-- [ ] Known limitations and **Future options** (event-listener safety net,
+- [x] Known limitations and **Future options** (event-listener safety net,
       text clean-up, details page / history, managed storage, rate limiting,
       OCR, other file types)
 
