@@ -90,7 +90,7 @@ nothing is lost.
 |---|---|---|
 | Hand-off hooks (MAIN world) | Notice every `File` the page obtains; forward it to the content script | Tab/frame |
 | Content script (isolated world) | Filter PDFs, read file bytes, open a port to the offscreen document. **No UI.** | Tab/frame |
-| Offscreen document | Everything in a scan: jobs, limits, extraction, chunking, API calls, parsing, aggregation, masking | We control it (v1: always open) |
+| Offscreen document | Everything in a scan: jobs, limits, extraction, chunking, API calls, parsing, aggregation, masking | We control it (v1.0: always open; v1.1: created on demand, closed when idle) |
 | Service worker | Create/re-create the offscreen document; pass settings to it; show notifications | Chrome controls it – may stop any time |
 | Options page | Edit settings in `chrome.storage.local` | While open |
 
@@ -183,6 +183,11 @@ not accepted up to 3 times, each after `ENSURE_OFFSCREEN` and a short pause.
 This covers an `ENSURE_OFFSCREEN` that reaches the service worker before
 `OFFSCREEN_IDLE` (Chrome does not order messages from different senders).
 After the last try → `SCAN_INTERRUPTED`.
+
+**Measured (step 10, Chrome on Windows, Task Manager, dev build):** the whole
+extension uses ≈ 59.7 MB with the offscreen document open and ≈ 51.0 MB with
+it closed – the document costs ≈ 9 MB (estimated 15–30 MB in D3). Re-creating
+it for the first PDF after idle gave no noticeable delay (not timed).
 
 Rejected alternatives (see §13): all-in-service-worker, pdf.js in the content
 script, extraction-only offscreen document.
@@ -915,7 +920,7 @@ Decisions challenged before implementation (2026-10-14).
 | R1 | **Alert, don't block** | – | Requirement from the task definition; not a design decision and not open for change. |
 | D1 | Language: **TypeScript** | C++ via WebAssembly; plain JavaScript; JS + JSDoc `@ts-check` | A build step is needed anyway (content scripts can't use `import`, pdf.js via npm). TS adds compile-time checking of messages between the three contexts, `chrome.*` and pdf.js types; familiar model coming from C++. |
 | D2 | PDF engine: **pdf.js** | unpdf, PDFium (WASM), MuPDF.js (AGPL), own parser, server-side extraction | Mature, permissive license, best JS API. Own parser would silently miss text (dangerous for a security tool). |
-| D3 | pdf.js runs in an **offscreen document** | All in the service worker; in the content script | Content script: can't call the API (CORS), loads pdf.js into every page, freezes pages. Service worker: no Web Worker, unsupported pdf.js setup, parsing blocks the worker, idle termination. Offscreen cost (~15–30 MB while open, ~0.1–0.3 s startup) is acceptable. |
+| D3 | pdf.js runs in an **offscreen document** | All in the service worker; in the content script | Content script: can't call the API (CORS), loads pdf.js into every page, freezes pages. Service worker: no Web Worker, unsupported pdf.js setup, parsing blocks the worker, idle termination. Offscreen cost (estimated ~15–30 MB while open, ~0.1–0.3 s startup; measured ≈ 9 MB in step 10, start-up not noticeable) is acceptable. |
 | D4 | Offscreen document **always present** in v1 | Lazy creation + idle close | Simpler and avoids creation races early on; the optimisation is planned as step 10. |
 | D5 | **Resilient concurrency** (§4.1) | Per-scan limits only | Multi-file and multi-tab uploads would multiply API calls and memory, race on offscreen creation, and flood alerts. |
 | D6 | **Whole scan pipeline in the offscreen document**; content script ↔ offscreen directly; service worker only creates the document, bridges settings and shows notifications | Extraction-only offscreen with API calls/jobs in the service worker | We don't control the service worker's lifetime; keeping it off the scan path means its termination can never interrupt or lose a scan. Also: all concurrency state in one context, one data hop instead of two. Cost: a settings handshake (offscreen can't read `chrome.storage`). |

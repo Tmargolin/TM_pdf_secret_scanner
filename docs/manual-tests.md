@@ -151,3 +151,16 @@ DESIGN §3 "Real-site results".
 | Site | Status |
 |---|---|
 | mail.google.com, drive.google.com, chatgpt.com, linkedin.com | Passed (step 8) |
+
+## Step 10 – offscreen lifecycle
+
+Dev build, mock API. Service-worker and offscreen consoles: `chrome://extensions` → *Inspect views*.
+
+| # | Do | Expect |
+|---|---|---|
+| 10.1 | Reload the extension | *Inspect views* lists the service worker only – no `offscreen.html` |
+| 10.2 | Options → Advanced: *Close the scanner when idle for* 10 → Save; add `one-page.pdf` | `offscreen.html` appears; normal result |
+| 10.3 | Wait about 10 s | Offscreen console: `idle: asking the service worker to close the document`; service worker: `offscreen document closed (idle)`; `offscreen.html` gone |
+| 10.4 | Add `multi-page.pdf` | The document comes back; *Secrets found in multi-page.pdf* |
+| 10.5 | *Close the scanner when idle for* 0 → Save; add a PDF; wait over a minute | The document stays open |
+| 10.6 | Chrome Task Manager (Shift+Esc), extension row, document open vs closed | Results: DESIGN §2 "Offscreen lifecycle from v1.1". **Restore defaults** afterwards |

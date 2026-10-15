@@ -7,7 +7,8 @@ as operating-system notifications. **Uploads are never blocked** – the
 extension only alerts.
 
 > **Status:** feature-complete for v1 – detection, scanning and notifications
-> work and were tested on Gmail, Google Drive, ChatGPT and LinkedIn.
+> work and were tested on Gmail, Google Drive, ChatGPT and LinkedIn. From
+> v1.1 the scanning document runs only while there is work.
 > Design, decisions and plan: [DESIGN.md](DESIGN.md).
 
 **How it works, in one line:** the browser hands a file to the site's code →
@@ -107,6 +108,7 @@ to the list as well.
 | Time limit per request | 15,000 ms | 1,000–120,000 | |
 | Retries per request | 2 | 0–5 | After network errors, timeouts, 429 and 5xx, with growing pauses |
 | Maximum PDF size | 25 MB | 1–45 | Files travel in one message (Chrome's 64 MB limit) |
+| Close the scanner when idle for | 60 seconds | 0, or 10–3,600 | Frees the scanning document's memory between uploads; the next PDF starts it again. 0 = never close |
 
 **Known Chrome behaviour – removing a site:** when you remove a site from the
 list, the extension gives Chrome's access to that site back
@@ -336,9 +338,12 @@ woken by single short messages (create the document, read settings, show a
 notification).
 
 **What it costs.**
-- Memory while the document is open (about 15–30 MB). In v1 it stays open
-  while the extension runs; creating it on demand and closing it when idle is
-  planned for v1.1.
+- Memory while the document is open: about 9 MB (measured: the whole
+  extension uses about 60 MB with it, 51 MB without). Since v1.1 it is created
+  for the first PDF and closed after *Close the scanner when idle for*
+  (default 60 s) without work; the next PDF creates it again, with no
+  noticeable delay. A PDF added just as it closes is resent automatically to
+  the new document.
 - An offscreen document can use only `chrome.runtime`: it cannot read
   `chrome.storage` (the service worker sends it the settings) and cannot show
   notifications (it sends the result to the service worker).
