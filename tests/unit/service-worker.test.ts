@@ -397,3 +397,45 @@ describe('SHOW_RESULT → notification', () => {
     expect(fake.notifications.size).toBe(0);
   });
 });
+
+describe('SCAN_INTERRUPTED and notification clicks (7.3)', () => {
+  const BATCH_ID = '6a2b3c4d-5555-4666-8777-988899990000';
+  const INTERRUPTED = { type: 'SCAN_INTERRUPTED', batchId: BATCH_ID, fileNames: ['a.pdf'] };
+
+  it('from a content script: the "interrupted" notification, no reply', async () => {
+    await startServiceWorker();
+    const { returned, sendResponse } = await send(INTERRUPTED, { ...CONTENT_SCRIPT, url: 'https://mail.google.com/' });
+    expect(returned).toBe(false);
+    expect(sendResponse).not.toHaveBeenCalled();
+    expect(fake.notifications.get(`batch-${BATCH_ID}-failed`)?.title).toBe('The scan of a.pdf was interrupted');
+  });
+
+  it.each([
+    ['the offscreen document', OFFSCREEN],
+    ['another extension', { id: 'otherextensionidotherextensionid', tab: { id: 7 } }],
+  ])('ignored when sent by %s', async (_name, sender) => {
+    await startServiceWorker();
+    await send(INTERRUPTED, sender);
+    expect(fake.notifications.size).toBe(0);
+  });
+
+  it('ignored when malformed (no file names)', async () => {
+    await startServiceWorker();
+    await send({ ...INTERRUPTED, fileNames: [] }, CONTENT_SCRIPT);
+    expect(fake.notifications.size).toBe(0);
+  });
+
+  it('clicking "isn\'t set up" opens the settings', async () => {
+    await startServiceWorker();
+    fake.onNotificationClicked.dispatch('not-configured');
+    await flushAsync();
+    expect(fake.optionsPageOpened).toBe(1);
+  });
+
+  it('clicking a result notification does not', async () => {
+    await startServiceWorker();
+    fake.onNotificationClicked.dispatch(`batch-${BATCH_ID}-secrets`);
+    await flushAsync();
+    expect(fake.optionsPageOpened).toBe(0);
+  });
+});

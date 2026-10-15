@@ -86,3 +86,35 @@ describe('showResult (details: result-notifications tests)', () => {
     expect(lines.map((l) => [l.level, l.line])).toEqual([['error', '[PSS:sw] notification could not be shown']]);
   });
 });
+
+describe('showInterrupted and clicks (7.3)', () => {
+  it('shows the interrupted notification', async () => {
+    await setup().notifier.showInterrupted({ type: 'SCAN_INTERRUPTED', batchId: BATCH_ID, fileNames: ['a.pdf'] });
+    expect(fake.notifications.get(`batch-${BATCH_ID}-failed`)?.title).toBe('The scan of a.pdf was interrupted');
+  });
+
+  it('a click on "isn\'t set up" opens the settings and closes the notification', async () => {
+    const { notifier } = setup();
+    await notifier.showResult({ ...SHOW, results: [{ ...result(1), status: 'error', errors: [{ code: 'NOT_CONFIGURED' }] }] });
+    expect(fake.notifications.has('not-configured')).toBe(true);
+    await notifier.onClicked('not-configured');
+    expect(fake.optionsPageOpened).toBe(1);
+    expect(fake.notifications.has('not-configured')).toBe(false);
+  });
+
+  it('a click on any other notification does nothing', async () => {
+    const { notifier } = setup();
+    await notifier.onClicked(`batch-${BATCH_ID}-secrets`);
+    await notifier.onClicked(`batch-${BATCH_ID}-failed`);
+    expect(fake.optionsPageOpened).toBe(0);
+  });
+
+  it('the settings cannot be opened: logged, never thrown', async () => {
+    const { notifier, lines } = setup({
+      ...chromeNotificationApi(),
+      openSettings: () => Promise.reject(new Error('no options page')),
+    });
+    await expect(notifier.onClicked('not-configured')).resolves.toBeUndefined();
+    expect(lines.map((l) => [l.level, l.line])).toEqual([['warn', '[PSS:sw] options page could not be opened']]);
+  });
+});

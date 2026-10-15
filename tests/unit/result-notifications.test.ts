@@ -6,9 +6,12 @@ import { describe, expect, it } from 'vitest';
 import {
   displayFileName,
   FILE_NAME_MAX_CHARS,
+  interruptedNotification,
   MAX_FILES_SHOWN,
   MAX_FINDINGS_SHOWN,
+  NOT_CONFIGURED_ID,
   notificationsFor,
+  opensSettings,
 } from '../../src/background/result-notifications.ts';
 import { errorMessageKey, type GetMessage } from '../../src/shared/i18n.ts';
 import type { ShowResult } from '../../src/shared/messages.ts';
@@ -216,5 +219,76 @@ describe('displayFileName', () => {
 
   it('a name that is empty after cleaning is shown as "PDF"', () => {
     expect(displayFileName('‮\u0000  ')).toBe('PDF');
+  });
+});
+
+describe('not configured (7.3)', () => {
+  it('files without an APP-ID: one "isn\'t set up" notification, no "couldn\'t scan" one', () => {
+    expect(notificationsFor(batch(failed('a.pdf', 'NOT_CONFIGURED'), failed('b.pdf', 'NOT_CONFIGURED')), t)).toEqual([
+      { id: NOT_CONFIGURED_ID, kind: 'not-configured', title: "PDF Secret Scanner isn't set up", message: 'Click to add your APP-ID.' },
+    ]);
+  });
+
+  it('the same id for every batch, so repeated uploads replace it instead of piling up', () => {
+    const first = notificationsFor(batch(failed('a.pdf', 'NOT_CONFIGURED')), t);
+    const second = notificationsFor({ ...batch(failed('b.pdf', 'NOT_CONFIGURED')), batchId: '11111111-2222-4333-8444-555555555555' }, t);
+    expect(first.map((s) => s.id)).toEqual(second.map((s) => s.id));
+  });
+
+  it('other failures of the same batch keep their own notification', () => {
+    const specs = notificationsFor(batch(failed('a.pdf', 'NOT_CONFIGURED'), failed('b.pdf', 'FILE_TOO_LARGE')), t);
+    expect(specs.map((s) => [s.kind, s.title])).toEqual([
+      ['failed', "Couldn't fully scan b.pdf"],
+      ['not-configured', "PDF Secret Scanner isn't set up"],
+    ]);
+  });
+});
+
+describe('opensSettings – which notifications open the settings when clicked', () => {
+  it('"isn\'t set up" and "APP-ID rejected" do', () => {
+    expect(opensSettings(NOT_CONFIGURED_ID)).toBe(true);
+    const [rejected] = notificationsFor(batch(failed('a.pdf', 'API_UNAUTHORIZED')), t);
+    expect(opensSettings(rejected?.id as string)).toBe(true);
+  });
+
+  it('a rejected APP-ID among several failed files: that notification opens them too', () => {
+    const [spec] = notificationsFor(batch(failed('a.pdf', 'PDF_INVALID'), failed('b.pdf', 'API_UNAUTHORIZED')), t);
+    expect(spec?.title).toBe("Couldn't fully scan 2 of 2 files");
+    expect(opensSettings(spec?.id as string)).toBe(true);
+  });
+
+  it('secrets and ordinary failures do not', () => {
+    const specs = notificationsFor(batch(secrets('a.pdf'), failed('b.pdf', 'PDF_INVALID')), t);
+    expect(specs.map((s) => opensSettings(s.id))).toEqual([false, false]);
+  });
+});
+
+describe('interruptedNotification (SCAN_INTERRUPTED)', () => {
+  const interrupted = (...fileNames: string[]) => interruptedNotification({ type: 'SCAN_INTERRUPTED', batchId: BATCH, fileNames }, t);
+
+  it('one file: "The scan of … was interrupted", with the batch\'s failed id (a late result replaces it)', () => {
+    expect(interrupted('report.pdf')).toEqual({
+      id: `batch-${BATCH}-failed`,
+      kind: 'failed',
+      title: 'The scan of report.pdf was interrupted',
+      message: 'The scan was interrupted – the file was not checked.',
+    });
+    expect(interrupted('report.pdf').id).toBe(notificationsFor(batch(failed('x.pdf', 'PDF_INVALID')), t)[0]?.id);
+  });
+
+  it('several files: one line each, at most 4, then "+N more"', () => {
+    const spec = interrupted('a.pdf', 'b.pdf', 'c.pdf', 'd.pdf', 'e.pdf', 'f.pdf');
+    expect(spec.title).toBe("Couldn't fully scan 6 of 6 files");
+    expect(spec.message.split('\n')).toEqual([
+      'a.pdf: The scan was interrupted – the file was not checked.',
+      'b.pdf: The scan was interrupted – the file was not checked.',
+      'c.pdf: The scan was interrupted – the file was not checked.',
+      'd.pdf: The scan was interrupted – the file was not checked.',
+      '+2 more',
+    ]);
+  });
+
+  it('file names are cleaned', () => {
+    expect(interrupted('invoice\u202Efdp.exe').title).toBe('The scan of invoicefdp.exe was interrupted');
   });
 });
