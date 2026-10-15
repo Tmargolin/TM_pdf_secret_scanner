@@ -45,34 +45,6 @@ describe('service worker start-up', () => {
     expect(fake.onStartup.listeners).toHaveLength(1);
     expect(fake.onMessage.listeners).toHaveLength(1);
   });
-
-  it('creates the offscreen document as soon as it starts', async () => {
-    await startServiceWorker();
-    expect(fake.offscreenDocuments).toHaveLength(1);
-  });
-
-  it('keeps exactly one document when install and startup events follow', async () => {
-    await startServiceWorker();
-    fake.onInstalled.dispatch(INSTALLED.update);
-    fake.onStartup.dispatch();
-    await flushAsync();
-    expect(fake.offscreenDocuments).toHaveLength(1);
-  });
-
-  it('re-creates the document on onStartup if it is gone', async () => {
-    await startServiceWorker();
-    fake.offscreenDocuments.length = 0;
-    fake.onStartup.dispatch();
-    await flushAsync();
-    expect(fake.offscreenDocuments).toHaveLength(1);
-  });
-
-  it('survives a failed creation at start-up and logs it', async () => {
-    fake.failNextCreate = new Error('boom');
-    await startServiceWorker();
-    expect(fake.offscreenDocuments).toHaveLength(0);
-    expect(console.error).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('content-script registration', () => {
@@ -93,14 +65,6 @@ describe('content-script registration', () => {
     fake.onInstalled.dispatch(INSTALLED.update);
     await flushAsync();
     expect(fake.registeredScripts).toEqual([]);
-  });
-
-  it('still keeps the offscreen document on install', async () => {
-    await startServiceWorker();
-    fake.offscreenDocuments.length = 0;
-    fake.onInstalled.dispatch(INSTALLED.update);
-    await flushAsync();
-    expect(fake.offscreenDocuments).toHaveLength(1);
   });
 });
 
@@ -132,7 +96,7 @@ describe('notifications blocked in Chrome', () => {
       throw new Error('not available');
     });
     await startServiceWorker();
-    expect(fake.offscreenDocuments).toHaveLength(1);
+    expect(fake.onMessage.listeners).toHaveLength(1);
     expect(console.error).not.toHaveBeenCalled();
   });
 });
@@ -158,14 +122,12 @@ describe('options page on install', () => {
   it('still sets everything up on install, also when the page cannot be opened', async () => {
     fake.grantedOrigins.push('http://localhost/*');
     await startServiceWorker();
-    fake.offscreenDocuments.length = 0;
     Reflect.set(fake.chrome.runtime, 'openOptionsPage', async () => {
       throw new Error('Could not create an options page.');
     });
     fake.onInstalled.dispatch(INSTALLED.install);
     await flushAsync();
     expect(console.warn).toHaveBeenCalledWith('[PSS:sw] options page could not be opened', expect.anything());
-    expect(fake.offscreenDocuments).toHaveLength(1);
     expect(fake.registeredScripts).toHaveLength(2); // hooks + content script
   });
 });

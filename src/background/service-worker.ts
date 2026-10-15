@@ -27,14 +27,9 @@ const scripts = createScriptRegistry({
   log,
 });
 
-/** Create the offscreen document; failures are already logged by the manager. */
-const keepOffscreenAlive = (): void => {
-  offscreen.ensureOffscreen().catch(() => {});
-};
-
-// Every time the service worker starts (install, update, browser start, extension
-// re-enabled, or woken after being stopped) – a cheap existence check.
-keepOffscreenAlive();
+// The offscreen document is created lazily (D41): only when a content script's
+// batch finds no receiver and asks with ENSURE_OFFSCREEN – never at start-up,
+// so a service worker woken for anything else does not bring it back.
 // Content-script registration follows allow list ∩ granted sites (D24). Every
 // trigger simply calls reconcile(): it is idempotent and runs one at a time.
 const reconcileScripts = (): void => {
@@ -42,7 +37,6 @@ const reconcileScripts = (): void => {
 };
 
 chrome.runtime.onInstalled.addListener((details) => {
-  keepOffscreenAlive();
   reconcileScripts(); // install, update, reload
   // First install only (not updates or reloads): the user must enter the
   // APP-ID and add sites before anything is scanned.
@@ -51,7 +45,6 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 chrome.runtime.onStartup.addListener(() => {
-  keepOffscreenAlive();
   reconcileScripts(); // browser start: re-check in case permissions changed while closed
 });
 // Granted in the options page, or revoked/granted in chrome://extensions.

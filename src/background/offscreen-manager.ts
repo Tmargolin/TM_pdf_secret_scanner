@@ -1,6 +1,6 @@
-// Creates the offscreen document and keeps it present (DESIGN.md §2, §4.1).
+// Creates the offscreen document on demand (DESIGN.md §2, D41).
 // Chrome allows only one offscreen document per extension, and several callers
-// may ask for it at the same time (install, startup, content scripts). All
+// may ask for it at the same time (content scripts in several tabs). All
 // concurrent calls share one creation ("single-flight").
 
 import type { Logger } from '../shared/safe-logger.ts';
