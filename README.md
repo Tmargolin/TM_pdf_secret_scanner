@@ -53,7 +53,14 @@ it also opens on first install):
    the EU endpoint.
 2. **Add the sites** whose PDFs should be checked (e.g. `mail.google.com`,
    `*.slack.com`). Chrome asks for access to each site; nothing is scanned
-   until a site is added. Reload tabs already open on it.
+   until a site is added.
+
+**Reload open tabs after changing the list.** Adding or removing a site takes
+effect in a tab only when the tab is (re)loaded: a site you add is not scanned
+in tabs that were already open, and a site you remove is still scanned in tabs
+that stay open, until you reload them. (Chrome injects the extension's scripts
+when a page loads; changing the list cannot add them to, or remove them from,
+a page that is already running.)
 3. *Advanced settings* hold the limits (chunk size, timeouts, file size …);
    each field shows its default. All settings and defaults:
    [DESIGN.md §6](DESIGN.md).

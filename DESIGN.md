@@ -206,8 +206,10 @@ documents are ever sent to the vendor.
 - Matching is per **frame URL**: an upload widget in a cross-origin iframe is
   scanned only if the iframe's site is also on the list. `about:blank` /
   `srcdoc` frames inherit their parent's origin (`matchOriginAsFallback`).
-- Tabs already open when a site is added must be **reloaded** before scanning
-  starts there (the options page says so).
+- Tabs already open must be **reloaded** for a change of the list to apply:
+  an added site is not scanned there before, a removed site is still scanned
+  there until the reload (injected scripts stay in a running page; seen on
+  Gmail in step 8). The options page says so when adding.
 - Empty list = nothing scanned. On install the options page opens so the user
   can set the APP-ID and add sites.
 
