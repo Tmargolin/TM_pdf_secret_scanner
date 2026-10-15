@@ -67,9 +67,6 @@ addressed by the planned per-site access status (see Future options).
 
 ## Notifications – what each one means
 
-*Texts added in step 7.1; shown from step 7.2. Until then a preview
-notification ("Received N file(s) from …") appears for every batch.*
-
 **When.** One Chrome notification per user action (one batch – e.g. three PDFs
 picked at once give one notification), only for PDFs added to sites on the
 allow list. A file that was checked completely and contains no secret gives

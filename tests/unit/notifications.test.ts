@@ -39,17 +39,30 @@ describe('siteName', () => {
   });
 });
 
-describe('skeleton batch notification', () => {
-  it('shows one notification with the texts from _locales', async () => {
-    await setup().notifier.showBatchReceived(SHOW);
+describe('showResult (details: result-notifications tests)', () => {
+  const secrets = (n: number) => ({
+    ...result(n),
+    status: 'secrets' as const,
+    findings: [{ entityType: 'AWS credentials', category: 'Access Tokens', masked: 'AKIA…LE', pages: [3] }],
+  });
+
+  it('a clean batch shows nothing', async () => {
+    await setup().notifier.showResult(SHOW);
+    expect(fake.notifications.size).toBe(0);
+  });
+
+  it('shows the notification with the extension icon, kept until dismissed', async () => {
+    await setup().notifier.showResult({ ...SHOW, results: [secrets(1)] });
     expect([...fake.notifications.entries()]).toEqual([
       [
-        `batch-${BATCH_ID}`,
+        `batch-${BATCH_ID}-secrets`,
         {
           type: 'basic',
           iconUrl: `chrome-extension://${FAKE_EXTENSION_ID}/${ICON_PATH}`,
-          title: 'PDF Secret Scanner (preview)',
-          message: 'Received 2 file(s) from mail.google.com. Results are not shown in notifications yet.',
+          title: 'Secrets found in file-1.pdf',
+          message: 'You added it to mail.google.com.\nAWS credentials (p. 3) AKIA…LE\nRemove the file and rotate the credentials.',
+          priority: 2,
+          requireInteraction: true,
         },
       ],
     ]);
@@ -61,20 +74,15 @@ describe('skeleton batch notification', () => {
 
   it('the same batch twice replaces its notification instead of adding one', async () => {
     const { notifier } = setup();
-    await notifier.showBatchReceived(SHOW);
-    await notifier.showBatchReceived(SHOW);
+    await notifier.showResult({ ...SHOW, results: [secrets(1)] });
+    await notifier.showResult({ ...SHOW, results: [secrets(1)] });
     expect(fake.notifications.size).toBe(1);
   });
 
   it('logs and does not throw when Chrome refuses the notification', async () => {
     const { notifier, lines } = setup({ ...chromeNotificationApi(), iconUrl: ICON_PATH }); // the step-2 bug
-    await expect(notifier.showBatchReceived(SHOW)).resolves.toBeUndefined();
+    await expect(notifier.showResult({ ...SHOW, results: [secrets(1)] })).resolves.toBeUndefined();
     expect(fake.notifications.size).toBe(0);
     expect(lines.map((l) => [l.level, l.line])).toEqual([['error', '[PSS:sw] notification could not be shown']]);
-  });
-
-  it('never puts file names into the notification (skeleton)', async () => {
-    await setup().notifier.showBatchReceived(SHOW);
-    expect(JSON.stringify([...fake.notifications.values()])).not.toContain('file-1.pdf');
   });
 });

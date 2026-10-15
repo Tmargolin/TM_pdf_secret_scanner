@@ -365,8 +365,8 @@ describe('SHOW_RESULT → notification', () => {
         scanId: '5f1c2a3e-1111-4222-8333-944455556666',
         batchId: BATCH_ID,
         fileName: 'a.pdf',
-        status: 'clean',
-        findings: [],
+        status: 'secrets',
+        findings: [{ entityType: 'AWS credentials', category: 'Access Tokens', masked: 'AKIA…LE', pages: [1] }],
         errors: [],
       },
     ],
@@ -377,9 +377,7 @@ describe('SHOW_RESULT → notification', () => {
     const { returned, sendResponse } = await send(SHOW, OFFSCREEN);
     expect(returned).toBe(false);
     expect(sendResponse).not.toHaveBeenCalled();
-    expect(fake.notifications.get(`batch-${BATCH_ID}`)?.message).toBe(
-      'Received 1 file(s) from localhost:8787. Results are not shown in notifications yet.',
-    );
+    expect(fake.notifications.get(`batch-${BATCH_ID}-secrets`)?.title).toBe('Secrets found in a.pdf');
   });
 
   it.each([

@@ -11,9 +11,6 @@ export const MESSAGES = {
   // Manifest (__MSG_extName__, __MSG_extDescription__)
   extName: 0,
   extDescription: 0,
-  // Walking-skeleton notification – replaced in step 7.2
-  skeletonBatchTitle: 0,
-  skeletonBatchMessage: 2,
   // Notification titles
   titleSecretsOne: 1,
   titleSecretsMany: 2,

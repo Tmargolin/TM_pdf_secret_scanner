@@ -89,7 +89,7 @@ chrome.runtime.onMessage.addListener((raw, sender, sendResponse) => {
   }
 
   if (message?.type === 'SHOW_RESULT' && isFromOffscreen(sender, extensionId, chrome.runtime.getURL(OFFSCREEN_PATH))) {
-    void notifier.showBatchReceived(message);
+    void notifier.showResult(message);
     return false; // display only, no reply
   }
 
