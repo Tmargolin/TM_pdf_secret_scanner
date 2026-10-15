@@ -12,7 +12,8 @@ Design: `DESIGN.md` §8 (permissions), §9, §10, §15
 | Icons | `icons/icon-{16,32,48,128}.png` → `dist/icons/` (manifest `icons`; notifications use 128) |
 | CI | `.github/workflows/ci.yml` |
 | Dependabot | `.github/dependabot.yml` |
-| Scripts | `scripts/probe-api.mjs`, `mock-api.mjs`, `make-fixtures.ts`, `serve-test-pages.mjs` |
+| Scripts | `scripts/probe-api.mjs`, `mock-api.mjs`, `make-fixtures.ts`, `serve-test-pages.mjs`, `package.ts` + `release.ts` |
+| Release package | `npm run package` → `release/pdf-secret-scanner-<version>.zip` (git-ignored): release build, `checkRelease` (manifest version = `package.json`, no localhost, no source maps, required + manifest-referenced files), `createZip` (no dependency, sorted, fixed timestamps – reproducible) |
 
 ## Manifest rules
 - Permissions: `storage`, `offscreen`, `notifications`, `scripting`;

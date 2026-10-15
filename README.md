@@ -37,6 +37,7 @@ npx playwright install chromium   # browser for the test suite
 |---|---|
 | `npm run build` | Release build in `dist/` |
 | `npm run build:dev` | Development build in `dist/` – additionally allows `http://localhost` (local test pages, mock API) |
+| `npm run package` | Release build, checked (version, no localhost, no source maps, all files) and zipped to `release/pdf-secret-scanner-<version>.zip` |
 
 ## Load in Chrome
 

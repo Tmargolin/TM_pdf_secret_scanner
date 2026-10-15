@@ -3,6 +3,7 @@ node_modules/
 
 # Build output and releases
 dist/
+release/
 *.zip
 
 # Test output

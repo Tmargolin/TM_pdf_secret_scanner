@@ -47,7 +47,7 @@ service worker → `chrome.notifications`
 
 ## Commands
 `npm run build` · `build:dev` · `typecheck` · `test` · `test:coverage` ·
-`serve:test-pages` · `mock-api` · `fixtures` · `audit` ·
+`serve:test-pages` · `mock-api` · `fixtures` · `audit` · `package` ·
 `node scripts/probe-api.mjs` (needs `PSS_APP_ID`; developer only).
 
 ## Where to look

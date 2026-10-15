@@ -16,7 +16,8 @@
     "audit": "npm audit --audit-level=high",
     "mock-api": "node scripts/mock-api.mjs",
     "serve:test-pages": "node scripts/serve-test-pages.mjs",
-    "fixtures": "node scripts/make-fixtures.ts"
+    "fixtures": "node scripts/make-fixtures.ts",
+    "package": "node scripts/package.ts"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.5",
