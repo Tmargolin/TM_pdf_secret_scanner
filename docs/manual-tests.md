@@ -108,3 +108,34 @@ before step 6). PDFs: `tests/fixtures/`.
 
 Job timeout, the extraction limit and aborting are covered by automated tests
 (they need very slow or very large files to see by hand).
+
+## Step 6 – scanning
+
+Dev build loaded, test page open, offscreen console on **Verbose**. Each file
+logs `file scanned { pageCount, chunks, failedChunks, calls, findings, ms }`;
+each batch `batch finished { outcomes: [...] }` (`clean`, `secrets:N`, or
+error codes). The notification is still the step-2 skeleton (step 7).
+
+**Against the mock API:** `npm run mock-api` (port 8787), then Options → API
+URL `http://localhost:8787/api/protect`, APP-ID `mock-app-id` → Save.
+
+| # | Do | Expect (offscreen console) |
+|---|---|---|
+| 6.1 | Section 1: `multi-page.pdf` | `file scanned { pageCount: 3, … findings: 1 }`, `outcomes: ['secrets:1']`; mock terminal: one request line (sizes only) |
+| 6.2 | Section 1: `one-page.pdf` | `['clean']` |
+| 6.3 | Section 2: all 9 fixtures | One batch, 9 outcomes: `secrets:1` for `multi-page` and `split-token`, `PDF_ENCRYPTED`, `NO_TEXT_LAYER`, the rest `clean` |
+| 6.4 | Options: APP-ID `wrong` → Save; `one-page.pdf` | `['API_UNAUTHORIZED']`; set `mock-app-id` again |
+| 6.5 | Restart the mock with `$env:MOCK_MODE="500"; npm run mock-api`; `one-page.pdf` | `API request will be retried` ×2, then `['API_HTTP_ERROR']`. Afterwards `Remove-Item Env:MOCK_MODE` and restart the mock |
+| 6.6 | Options: APP-ID empty → Save; `one-page.pdf` | `['NOT_CONFIGURED']`, no request in the mock terminal |
+
+**Against the real API:** stop the mock; Options → Restore defaults (keeps the
+APP-ID), enter the real APP-ID → Save.
+
+| # | Do | Expect |
+|---|---|---|
+| 6.7 | `multi-page.pdf` | `['secrets:1']` |
+| 6.8 | `one-page.pdf` | `['clean']` |
+| 6.9 | Look through every extension console | No PDF text, key or APP-ID in any line |
+
+Retries with back-off, job timeout, splitting of cut-short chunks and
+round-robin across jobs are covered by automated tests.
