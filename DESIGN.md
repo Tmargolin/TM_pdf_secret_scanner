@@ -118,8 +118,9 @@ nothing is lost.
 5. **Self-healing:** if the port closes before `BATCH_ACCEPTED` (e.g. no
    offscreen document: "Receiving end does not exist"), the files never
    arrived: the content script sends `ENSURE_OFFSCREEN` to the service worker,
-   waits for the reply, and resends the batch once. If that fails too, or the
-   port closes after `BATCH_ACCEPTED` but before `BATCH_DONE` (offscreen
+   waits for the reply, and resends the batch (once in v1.0; up to 3 times with
+   short pauses from v1.1, D43). If the last resend is not accepted either, or
+   the port closes after `BATCH_ACCEPTED` but before `BATCH_DONE` (offscreen
    document died mid-scan), the content script sends `SCAN_INTERRUPTED` to the
    service worker → failure notification. No matching of Chrome's error text.
 

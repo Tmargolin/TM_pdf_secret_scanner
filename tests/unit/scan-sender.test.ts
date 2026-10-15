@@ -130,10 +130,10 @@ describe('self-healing (D35)', () => {
     expect(t.reports).toEqual([]);
   });
 
-  it('closes again before BATCH_ACCEPTED → SCAN_INTERRUPTED, no third try', async () => {
-    const t = setup([missing, missing]);
+  it('never accepted after 3 resends → SCAN_INTERRUPTED, no fifth try', async () => {
+    const t = setup([missing, missing, missing, missing]);
     expect(await t.sender.send(BATCH)).toBe('interrupted');
-    expect(t.clients).toHaveLength(2);
+    expect(t.clients).toHaveLength(4);
     expect(t.reports).toEqual([{ batchId: BATCH_ID, fileNames: ['file-1.pdf', 'file-2.pdf'] }]);
   });
 
@@ -155,7 +155,7 @@ describe('self-healing (D35)', () => {
   it('a content script whose extension was reloaded (connect throws) reports instead of throwing', async () => {
     const t = setup([], { connectThrows: true });
     expect(await t.sender.send(BATCH)).toBe('interrupted');
-    expect(t.ensureCalls()).toBe(1);
+    expect(t.ensureCalls()).toBe(3);
   });
 
   it('still resolves when the interruption cannot be reported', async () => {

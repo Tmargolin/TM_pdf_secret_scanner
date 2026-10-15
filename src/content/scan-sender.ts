@@ -1,8 +1,10 @@
 // Sends one batch to the offscreen document over its own port and decides,
 // from the replies, whether to retry or report an interruption (D35,
 // DESIGN.md §2 flows 3 and 5, docs/agents/content-script.md):
-//   port closes before BATCH_ACCEPTED → files never arrived → ENSURE_OFFSCREEN, resend once
-//   closes again before BATCH_ACCEPTED, or after it but before BATCH_DONE → SCAN_INTERRUPTED
+//   port closes before BATCH_ACCEPTED, or BATCH_REJECTED (document closing, D42)
+//     → files never arrived → ENSURE_OFFSCREEN, pause, resend – up to 3 times (D43)
+//   still not accepted after the last resend, ENSURE_OFFSCREEN fails, or the port
+//     closes after BATCH_ACCEPTED but before BATCH_DONE → SCAN_INTERRUPTED
 //   BATCH_DONE → finished (the notification comes from the service worker)
 
 import { parseScanPortReply, type BatchEnd, type ScanRequest } from '../shared/messages.ts';
@@ -14,6 +16,13 @@ export interface OutgoingBatch {
   requests: ScanRequest[];
 }
 
+/**
+ * Pause before each resend (D43). The first resend follows a missing document
+ * (lazy creation) and needs none; the later ones give a closing document time
+ * to be closed, so the next ENSURE_OFFSCREEN creates a new one.
+ */
+export const RESEND_PAUSES_MS: readonly number[] = [0, 200, 500];
+
 export interface ScanSenderDeps {
   /** Opens a new scan port (chrome.runtime.connect). */
   connect(): ScanPort;
@@ -22,6 +31,8 @@ export interface ScanSenderDeps {
   /** Tells the service worker the batch could not be (fully) scanned. */
   reportInterrupted(batchId: string, fileNames: string[]): Promise<void>;
   log: Logger;
+  /** Waits between resends; tests replace it. */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export type BatchOutcome = 'done' | 'interrupted';
@@ -30,6 +41,7 @@ type AttemptResult = 'done' | 'not-accepted' | 'interrupted';
 
 export function createScanSender(deps: ScanSenderDeps) {
   const { log } = deps;
+  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
   /** One try: send everything on a fresh port and wait for the port to finish. */
   const attempt = (batch: OutgoingBatch): Promise<AttemptResult> =>
@@ -80,9 +92,12 @@ export function createScanSender(deps: ScanSenderDeps) {
   return {
     async send(batch: OutgoingBatch): Promise<BatchOutcome> {
       let result = await attempt(batch);
-      if (result === 'not-accepted') {
+      for (const pause of RESEND_PAUSES_MS) {
+        if (result !== 'not-accepted') break;
         log.debug('scan port not accepted, asking for the offscreen document');
-        if (await deps.ensureOffscreen()) result = await attempt(batch);
+        if (!(await deps.ensureOffscreen())) break;
+        if (pause > 0) await sleep(pause);
+        result = await attempt(batch);
       }
       if (result === 'done') {
         log.debug('batch done', { files: batch.requests.length });

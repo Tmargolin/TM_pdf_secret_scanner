@@ -21,9 +21,11 @@ Port `chrome.runtime.connect({ name: 'scan-batch' })` → `SCAN_REQUEST` per fil
    a batch with no PDF sends nothing.
 4. Bytes sent as base64.
 5. Port closes before `BATCH_ACCEPTED`, or `BATCH_REJECTED` (document
-   closing, D42) → `ENSURE_OFFSCREEN` to service worker → resend the batch once. Closes again before `BATCH_ACCEPTED`, or closes after
-   `BATCH_ACCEPTED` but before `BATCH_DONE` → `SCAN_INTERRUPTED` to service
-   worker. `BATCH_DONE` → finished. Never match Chrome's error text.
+   closing, D42) → `ENSURE_OFFSCREEN` to service worker → pause → resend the
+   batch; up to 3 resends, pauses `RESEND_PAUSES_MS` 0 / 200 / 500 ms (D43).
+   `ENSURE_OFFSCREEN` fails, still not accepted after the last resend, or the
+   port closes after `BATCH_ACCEPTED` but before `BATCH_DONE` →
+   `SCAN_INTERRUPTED` to service worker. `BATCH_DONE` → finished. Never match Chrome's error text.
 
 ## Rules
 - Treat data from the MAIN world as untrusted (must be `File`, size-checked).
