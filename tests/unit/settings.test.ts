@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FAKE_APP_ID } from '../helpers/fake-secrets.ts';
 import {
   checkApiUrl,
   checkAppId,
@@ -146,7 +147,7 @@ describe('checkApiUrl', () => {
 describe('checkAppId', () => {
   it('accepts empty (not configured) and normal values', () => {
     expect(checkAppId('')).toBeNull();
-    expect(checkAppId('cc6a6cfc-0000-0000-0000-000000000000')).toBeNull();
+    expect(checkAppId(FAKE_APP_ID)).toBeNull();
   });
 
   it('rejects spaces and overly long values', () => {

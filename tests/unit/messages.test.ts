@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { AWS_EXAMPLE_KEY, fakeAwsKeyId } from '../helpers/fake-secrets.ts';
 import {
   base64DecodedLength,
   FULLY_MASKED,
@@ -106,7 +107,7 @@ describe('isMaskedValue', () => {
   });
 
   it('rejects anything else, including short unmasked secrets', () => {
-    for (const v of ['AKIAZ7Q4XK2M9TPLW3VB', 'AKIA…B12', 'AKI…B1', 'AKIA...B1', '…', '', '•••••', 'pass1234', 7, null]) {
+    for (const v of [AWS_EXAMPLE_KEY, fakeAwsKeyId(), 'AKIA…B12', 'AKI…B1', 'AKIA...B1', '…', '', '•••••', 'pass1234', 7, null]) {
       expect(isMaskedValue(v)).toBe(false);
     }
   });
@@ -317,7 +318,7 @@ describe('parseRuntimeMessage – SHOW_RESULT', () => {
     ['errors not a list', showResult({ results: [result({ errors: 'none' })] })],
     ['too many findings', showResult({ results: [result({ findings: Array.from({ length: LIMITS.findingsPerFile + 1 }, () => finding()) })] })],
     ['a finding that is not an object', showResult({ results: [result({ findings: ['AKIA'] })] })],
-    ['an unmasked secret', showResult({ results: [result({ findings: [finding({ masked: 'AKIAZ7Q4XK2M9TPLW3VB' })] })] })],
+    ['an unmasked secret', showResult({ results: [result({ findings: [finding({ masked: fakeAwsKeyId() })] })] })],
     ['a wrongly masked value', showResult({ results: [result({ findings: [finding({ masked: 'AKIA…B12' })] })] })],
     ['a non-text entity type', showResult({ results: [result({ findings: [finding({ entityType: 5 })] })] })],
     ['a non-text category', showResult({ results: [result({ findings: [finding({ category: null })] })] })],

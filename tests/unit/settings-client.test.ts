@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { FAKE_APP_ID } from '../helpers/fake-secrets.ts';
 import { createSettingsClient, DEFAULT_RETRY_DELAYS_MS } from '../../src/offscreen/settings-client.ts';
 import { clearRegisteredSecrets, createLogger, sanitizeString, type LogLevel } from '../../src/shared/safe-logger.ts';
 import { getDefaultSettings } from '../../src/shared/settings.ts';
@@ -119,7 +120,7 @@ describe('accept', () => {
 
   it('registers the APP-ID so it never appears in logs', () => {
     const { client } = setup([]);
-    client.accept(reply({ appId: 'cc6a6cfc-1111-4222-8333-944455556666' }));
-    expect(sanitizeString('cc6a6cfc-1111-4222-8333-944455556666')).toBe('[redacted]');
+    client.accept(reply({ appId: FAKE_APP_ID }));
+    expect(sanitizeString(FAKE_APP_ID)).toBe('[redacted]');
   });
 });

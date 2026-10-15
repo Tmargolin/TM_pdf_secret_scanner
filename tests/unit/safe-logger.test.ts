@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { AWS_EXAMPLE_KEY, FAKE_APP_ID, fakeAwsKeyId } from '../helpers/fake-secrets.ts';
 import {
   clearRegisteredSecrets,
   createLogger,
@@ -14,8 +15,8 @@ import {
   type LogSink,
 } from '../../src/shared/safe-logger.ts';
 
-const APP_ID = 'cc6a6cfc-1111-4222-8333-944455556666';
-const AWS_KEY = 'AKIAZ7Q4XK2M9TPLW3VB';
+const APP_ID = FAKE_APP_ID;
+const AWS_KEY = fakeAwsKeyId(); // random on every run: redaction must not depend on one value
 const GITHUB_TOKEN = `ghp_${'a1B2c3D4e5'.repeat(4)}`;
 const JWT = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0In0.c2lnbmF0dXJlX3ZhbHVl';
 const PEM = '-----BEGIN RSA PRIVATE KEY-----\nMIIEowIBAAKCAQEA\n-----END RSA PRIVATE KEY-----';
@@ -52,7 +53,8 @@ describe('sanitizeString', () => {
 
   it.each([
     ['AWS key', AWS_KEY],
-    ['AWS temporary key', 'ASIAZ7Q4XK2M9TPLW3VB'],
+    ['AWS temporary key', fakeAwsKeyId('ASIA')],
+    ['AWS example key', AWS_EXAMPLE_KEY],
     ['GitHub token', GITHUB_TOKEN],
     ['JWT', JWT],
     ['PEM block', PEM],
@@ -164,7 +166,7 @@ describe('createLogger', () => {
     createLogger('api', { sink }).warn(`request with ${APP_ID} failed`, {
       status: 401,
       appId: APP_ID,
-      prompt: 'page text with AKIAZ7Q4XK2M9TPLW3VB inside',
+      prompt: `page text with ${AWS_KEY} inside`,
       responseBody: '{"status":"success","result":{"action":"log"}} '.repeat(100),
       note: `header was ${APP_ID}`,
     });

@@ -28,7 +28,15 @@ PDF fixture rules:
 - **Large fixtures are not committed**: build them in memory inside the test
   that needs them (`buildPdf` from `scripts/make-fixtures.ts`).
 - Output must be reproducible (fixed file ID, no dates or random data).
-- Secrets: only AWS's documented example key (`AKIAIOSFODNN7EXAMPLE`).
+
+## Secrets in committed files
+Applies to every committed file – fixtures, tests, scripts, docs.
+- The only literal secret is AWS's documented example key
+  (`AKIAIOSFODNN7EXAMPLE`, `AWS_EXAMPLE_KEY` in `tests/helpers/fake-secrets.ts`).
+- No other realistic-looking credential. When a test must hold for any value
+  (e.g. redaction), build it at run time: `fakeAwsKeyId()`.
+- No part of a real APP-ID, not even a prefix; use `FAKE_APP_ID`.
+- Recorded API responses: only ones made with the example key.
 
 ## Rules
 - Each `feat`/`fix` commit is followed by a `test` commit covering it.

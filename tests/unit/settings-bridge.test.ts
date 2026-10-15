@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { FAKE_APP_ID } from '../helpers/fake-secrets.ts';
 import { createSettingsBridge } from '../../src/background/settings-bridge.ts';
 import type { SettingsMessage } from '../../src/shared/messages.ts';
 import { clearRegisteredSecrets, createLogger, sanitizeString, type LogLevel } from '../../src/shared/safe-logger.ts';
@@ -39,9 +40,9 @@ describe('currentMessage', () => {
   });
 
   it('registers the APP-ID so it never appears in logs', async () => {
-    const { bridge } = setup({ appId: 'cc6a6cfc-1111-4222-8333-944455556666' });
+    const { bridge } = setup({ appId: FAKE_APP_ID });
     await bridge.currentMessage();
-    expect(sanitizeString('id cc6a6cfc-1111-4222-8333-944455556666')).toBe('id [redacted]');
+    expect(sanitizeString(`id ${FAKE_APP_ID}`)).toBe('id [redacted]');
   });
 });
 
