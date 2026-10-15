@@ -53,7 +53,7 @@ service worker console open.
 | 3.10 | Add `example.com` again; add `google` | "already on the list"; "not a site" with the hint; no Chrome prompt. |
 | 3.11 | `chrome://extensions` → Site access: remove example.com | Service worker `active: 1`; example.com no longer scanned (still listed – README known issue). |
 | 3.12 | Options: Remove example.com, add it again | Listed; `active: 2` (Chrome may skip the prompt – README). |
-| 3.13 | Remove example.com | `active: 1`. |
+| 3.13 | Remove example.com | "Removed … Tabs still open on it are scanned until you reload them."; `active: 1`. |
 | 3.14 | Restart Chrome; pick a PDF on the test page | `batch received` – registration and settings survived the restart. |
 | 3.15 | *(Optional)* turn off this extension's notifications in Chrome | Red banner on the open options page; service worker warns `notifications are blocked in Chrome …`. Turn them on again → banner gone. |
 

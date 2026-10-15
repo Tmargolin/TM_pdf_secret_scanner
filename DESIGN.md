@@ -209,7 +209,7 @@ documents are ever sent to the vendor.
 - Tabs already open must be **reloaded** for a change of the list to apply:
   an added site is not scanned there before, a removed site is still scanned
   there until the reload (injected scripts stay in a running page; seen on
-  Gmail in step 8). The options page says so when adding.
+  Gmail in step 8). The options page says so after adding and removing.
 - Empty list = nothing scanned. On install the options page opens so the user
   can set the APP-ID and add sites.
 

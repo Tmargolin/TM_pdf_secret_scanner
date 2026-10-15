@@ -107,6 +107,19 @@ export async function addSite(input: string, shownSites: readonly string[], deps
 }
 
 /**
+ * What the options page says after a change. A change of the list reaches a
+ * tab only when it (re)loads: injected scripts stay in a running page, so a
+ * removed site is still scanned in tabs that stay open (seen on Gmail, step 8).
+ */
+export function addedMessage(pattern: string): string {
+  return `Added ${pattern}. Reload tabs already open on it to start scanning there.`;
+}
+
+export function removedMessage(pattern: string): string {
+  return `Removed ${pattern}. Tabs still open on it are scanned until you reload them.`;
+}
+
+/**
  * Removes a site: saves the list first, then gives the permission back –
  * unless another site still on the list overlaps it (Chrome may have merged
  * the grants), or Chrome refuses (a permission from the manifest, e.g. the
@@ -119,7 +132,7 @@ export async function removeSite(pattern: string, deps: SitesDeps): Promise<Site
   if (!saved.ok) return { ok: false, error: 'The site list could not be saved.' };
 
   if (!sites.some((site) => overlaps(site, pattern))) {
-    // Not fatal: the site is off the list, so it is no longer scanned either way.
+    // Not fatal: the site is off the list, so new pages are no longer scanned either way.
     const removed = await deps.permissions.remove(pattern).catch(() => false);
     if (!removed) deps.log.warn('site access could not be given back to Chrome (kept by Chrome or from the manifest)');
   }

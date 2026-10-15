@@ -20,6 +20,9 @@ Design: `DESIGN.md` §3.1, §6, §8
 - Remove: save list first → `chrome.permissions.remove`, skipped when a
   remaining site overlaps (same host or sub/parent domain); errors (manifest
   permissions such as dev localhost) → warning logged, not fatal.
+- Messages after a change (`addedMessage` / `removedMessage`): open tabs keep
+  their state until reloaded – an added site is scanned there only after a
+  reload, a removed one until a reload.
 - Chrome may keep a removed site under Details → Site access and re-grant it
   without a prompt (observed; README) – expected, not a bug.
 - Site list re-rendered on `storage.onChanged` (`local`).

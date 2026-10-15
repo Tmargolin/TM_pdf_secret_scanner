@@ -6,7 +6,7 @@ import { notificationsBlocked } from '../shared/notification-permission.ts';
 import { createLogger } from '../shared/safe-logger.ts';
 import { getDefaultSettings, isConfigured, loadSettings, type Settings } from '../shared/settings.ts';
 import { defaultFormValues, errorsByField, NUMERIC_FIELDS, saveForm, toFormValues, type FormValues } from './form.ts';
-import { addSite, chromePermissionsApi, removeSite, type SiteResult } from './sites.ts';
+import { addedMessage, addSite, chromePermissionsApi, removedMessage, removeSite, type SiteResult } from './sites.ts';
 
 const storage = chrome.storage.local;
 const dev = __DEV__;
@@ -123,7 +123,7 @@ function renderSites(sites: string[]): void {
     remove.setAttribute('aria-label', `Remove ${site}`);
     remove.addEventListener('click', () => {
       void removeSite(site, sitesDeps).then(
-        (result) => showSiteResult(result, `Removed ${site}.`),
+        (result) => showSiteResult(result, removedMessage(site)),
         () => setSiteStatus('The site list could not be saved.', 'error'),
       );
     });
@@ -147,7 +147,7 @@ byId<HTMLFormElement>('add-site-form').addEventListener('submit', (event) => {
   // addSite asks Chrome for permission before its first await: still inside this click.
   void addSite(field.value, shownSites, sitesDeps).then(
     (result) => {
-      showSiteResult(result, result.ok ? `Added ${result.pattern}. Reload tabs already open on it.` : '');
+      showSiteResult(result, result.ok ? addedMessage(result.pattern) : '');
       if (result.ok) field.value = '';
     },
     () => setSiteStatus('The site list could not be saved.', 'error'),
