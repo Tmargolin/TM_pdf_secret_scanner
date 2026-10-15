@@ -293,6 +293,61 @@ describe('lazy offscreen document (D41)', () => {
   });
 });
 
+describe('OFFSCREEN_IDLE (D42)', () => {
+  const idleFrom = (documentId: string | null) => ({ ...OFFSCREEN, ...(documentId ? { documentId } : {}) });
+
+  it('closes the document that reported idle, without replying', async () => {
+    await startServiceWorker();
+    await send({ type: 'ENSURE_OFFSCREEN' }, CONTENT_SCRIPT);
+    const { returned, sendResponse } = await send({ type: 'OFFSCREEN_IDLE' }, idleFrom('doc-1'));
+    expect(returned).toBe(false);
+    expect(sendResponse).not.toHaveBeenCalled();
+    expect(fake.offscreenDocuments).toHaveLength(0);
+  });
+
+  it('ignores a report from an earlier document', async () => {
+    await startServiceWorker();
+    await send({ type: 'ENSURE_OFFSCREEN' }, CONTENT_SCRIPT);
+    await send({ type: 'OFFSCREEN_IDLE' }, idleFrom('doc-1'));
+    await send({ type: 'ENSURE_OFFSCREEN' }, CONTENT_SCRIPT); // doc-2
+    await send({ type: 'OFFSCREEN_IDLE' }, idleFrom('doc-1'));
+    expect(fake.offscreenDocumentId).toBe('doc-2');
+  });
+
+  it('an ENSURE_OFFSCREEN right after the report gets a new document', async () => {
+    await startServiceWorker();
+    await send({ type: 'ENSURE_OFFSCREEN' }, CONTENT_SCRIPT);
+    const idle = vi.fn();
+    const ensured = vi.fn();
+    fake.onMessage.dispatch({ type: 'OFFSCREEN_IDLE' }, idleFrom('doc-1') as object as chrome.runtime.MessageSender, idle);
+    fake.onMessage.dispatch({ type: 'ENSURE_OFFSCREEN' }, CONTENT_SCRIPT as object as chrome.runtime.MessageSender, ensured);
+    await flushAsync();
+    expect(ensured).toHaveBeenCalledWith({ ok: true });
+    expect(fake.closeDocumentCalls).toBe(1);
+    expect(fake.offscreenDocumentId).toBe('doc-2');
+  });
+
+  it.each([
+    ['a content script', { ...CONTENT_SCRIPT, documentId: 'doc-1' }],
+    ['another extension page', { id: FAKE_EXTENSION_ID, url: `chrome-extension://${FAKE_EXTENSION_ID}/options/options.html`, documentId: 'doc-1' }],
+  ])('ignores OFFSCREEN_IDLE from %s', async (_name, sender) => {
+    await startServiceWorker();
+    await send({ type: 'ENSURE_OFFSCREEN' }, CONTENT_SCRIPT);
+    await send({ type: 'OFFSCREEN_IDLE' }, sender);
+    expect(fake.closeDocumentCalls).toBe(0);
+    expect(fake.offscreenDocuments).toHaveLength(1);
+  });
+
+  it('a failed close is only logged', async () => {
+    await startServiceWorker();
+    await send({ type: 'ENSURE_OFFSCREEN' }, CONTENT_SCRIPT);
+    fake.failNextClose = new Error('closing failed');
+    await send({ type: 'OFFSCREEN_IDLE' }, idleFrom('doc-1'));
+    expect(console.warn).toHaveBeenCalledWith('[PSS:sw] offscreen document could not be closed', expect.anything());
+    expect(fake.offscreenDocuments).toHaveLength(1);
+  });
+});
+
 describe('ENSURE_OFFSCREEN', () => {
   it('re-creates a missing document for a content script and replies ok', async () => {
     await startServiceWorker();

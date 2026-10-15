@@ -61,6 +61,12 @@ export interface ChromeFake {
   readonly createDocumentCalls: chrome.offscreen.CreateParameters[];
   /** When set, the next createDocument call fails with this error. */
   failNextCreate: Error | null;
+  /** documentId of the current offscreen document ("doc-1", "doc-2", … per creation), or null. */
+  readonly offscreenDocumentId: string | null;
+  /** How many times chrome.offscreen.closeDocument was called. */
+  readonly closeDocumentCalls: number;
+  /** When set, the next closeDocument call fails with this error. */
+  failNextClose: Error | null;
   readonly onInstalled: FakeEvent<(details: chrome.runtime.InstalledDetails) => void>;
   /** How many times chrome.runtime.openOptionsPage was called. */
   readonly optionsPageOpened: number;
@@ -107,6 +113,8 @@ export function createChromeFake(): ChromeFake {
   const offscreenDocuments: string[] = [];
   const getContextsCalls: ContextFilter[] = [];
   const createDocumentCalls: chrome.offscreen.CreateParameters[] = [];
+  let documentsCreated = 0;
+  let closeDocumentCalls = 0;
   const onInstalled = createFakeEvent<(details: chrome.runtime.InstalledDetails) => void>();
   let optionsPageOpened = 0;
   const onStartup = createFakeEvent<() => void>();
@@ -133,6 +141,13 @@ export function createChromeFake(): ChromeFake {
     getContextsCalls,
     createDocumentCalls,
     failNextCreate: null,
+    get offscreenDocumentId() {
+      return offscreenDocuments.length > 0 ? `doc-${documentsCreated}` : null;
+    },
+    get closeDocumentCalls() {
+      return closeDocumentCalls;
+    },
+    failNextClose: null,
     onInstalled,
     get optionsPageOpened() {
       return optionsPageOpened;
@@ -168,7 +183,7 @@ export function createChromeFake(): ChromeFake {
       const wantsOffscreen = !filter.contextTypes || filter.contextTypes.includes('OFFSCREEN_DOCUMENT');
       return offscreenDocuments
         .filter((url) => wantsOffscreen && (!filter.documentUrls || filter.documentUrls.includes(url)))
-        .map((documentUrl) => ({ contextType: 'OFFSCREEN_DOCUMENT', documentUrl }));
+        .map((documentUrl) => ({ contextType: 'OFFSCREEN_DOCUMENT', documentUrl, documentId: fake.offscreenDocumentId }));
     },
     onInstalled,
     onStartup,
@@ -212,7 +227,19 @@ export function createChromeFake(): ChromeFake {
         throw error;
       }
       if (offscreenDocuments.length > 0) throw new Error('Only a single offscreen document may be created.');
+      documentsCreated++;
       offscreenDocuments.push(getURL(params.url));
+    },
+    async closeDocument() {
+      closeDocumentCalls++;
+      await Promise.resolve(); // closing is asynchronous in Chrome too
+      if (fake.failNextClose) {
+        const error = fake.failNextClose;
+        fake.failNextClose = null;
+        throw error;
+      }
+      if (offscreenDocuments.length === 0) throw new Error('No current offscreen document.');
+      offscreenDocuments.length = 0;
     },
   };
 

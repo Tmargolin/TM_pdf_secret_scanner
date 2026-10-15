@@ -119,6 +119,129 @@ describe('createOffscreenManager', () => {
   });
 });
 
+/** A fake with documents that have ids, and a log of every create/close in order. */
+function lifecycleApi() {
+  let current: string | null = null;
+  let created = 0;
+  const events: string[] = [];
+  let failClose: Error | null = null;
+  const tick = () => new Promise((r) => setTimeout(r, 1)); // Chrome calls take time
+  const api: OffscreenApi = {
+    hasDocument: async () => current !== null,
+    createDocument: async () => {
+      await tick();
+      current = `doc-${++created}`;
+      events.push(`create ${current}`);
+    },
+    currentDocumentId: async () => current,
+    closeDocument: async () => {
+      await tick();
+      if (failClose) throw failClose;
+      events.push(`close ${current}`);
+      current = null;
+    },
+  };
+  return {
+    api,
+    events,
+    current: () => current,
+    failClose: (error: Error) => void (failClose = error),
+  };
+}
+
+describe('closeOffscreen (D42)', () => {
+  it('closes the document that reported idle', async () => {
+    const t = lifecycleApi();
+    const { log, lines } = recordingLogger();
+    const manager = createOffscreenManager(t.api, log);
+    await manager.ensureOffscreen();
+    await manager.closeOffscreen('doc-1');
+    expect(t.events).toEqual(['create doc-1', 'close doc-1']);
+    expect(lines).toContainEqual({ level: 'info', line: '[PSS:test] offscreen document closed (idle)' });
+  });
+
+  it('never closes a newer document than the one that reported idle', async () => {
+    const t = lifecycleApi();
+    const { log, lines } = recordingLogger();
+    const manager = createOffscreenManager(t.api, log);
+    await manager.ensureOffscreen();
+    await manager.closeOffscreen('doc-1');
+    await manager.ensureOffscreen(); // doc-2
+    await manager.closeOffscreen('doc-1'); // a late report from the old document
+    expect(t.current()).toBe('doc-2');
+    expect(lines).toContainEqual({ level: 'info', line: '[PSS:test] idle report from an earlier offscreen document ignored' });
+  });
+
+  it('without a documentId closes whatever document exists', async () => {
+    const t = lifecycleApi();
+    const manager = createOffscreenManager(t.api, recordingLogger().log);
+    await manager.ensureOffscreen();
+    await manager.closeOffscreen();
+    expect(t.current()).toBeNull();
+  });
+
+  it('no document: nothing to close', async () => {
+    const t = lifecycleApi();
+    await createOffscreenManager(t.api, recordingLogger().log).closeOffscreen('doc-1');
+    expect(t.events).toEqual([]);
+  });
+
+  it('a failed close is logged and does not reject; the next ensure still works', async () => {
+    const t = lifecycleApi();
+    const { log, lines } = recordingLogger();
+    const manager = createOffscreenManager(t.api, log);
+    await manager.ensureOffscreen();
+    t.failClose(new Error('closing failed'));
+    await expect(manager.closeOffscreen('doc-1')).resolves.toBeUndefined();
+    expect(lines.at(-1)).toEqual({ level: 'warn', line: '[PSS:test] offscreen document could not be closed' });
+    await manager.ensureOffscreen();
+    expect(t.current()).toBe('doc-1'); // still open – it resumes by itself (safety valve)
+  });
+});
+
+describe('one queue for create and close', () => {
+  it('an ensure that arrives during a close waits for it, then creates a new document', async () => {
+    const t = lifecycleApi();
+    const manager = createOffscreenManager(t.api, recordingLogger().log);
+    await manager.ensureOffscreen();
+    const closing = manager.closeOffscreen('doc-1');
+    const ensured = manager.ensureOffscreen(); // a content script's batch was rejected meanwhile
+    await Promise.all([closing, ensured]);
+    expect(t.events).toEqual(['create doc-1', 'close doc-1', 'create doc-2']);
+    expect(t.current()).toBe('doc-2');
+  });
+
+  it('an ensure queued after a close does not join an ensure queued before it', async () => {
+    const t = lifecycleApi();
+    const manager = createOffscreenManager(t.api, recordingLogger().log);
+    const before = manager.ensureOffscreen();
+    const closing = manager.closeOffscreen('doc-1');
+    const after = manager.ensureOffscreen();
+    expect(after).not.toBe(before);
+    await Promise.all([before, closing, after]);
+    expect(t.events).toEqual(['create doc-1', 'close doc-1', 'create doc-2']);
+  });
+
+  it('ensures with nothing queued after them share one creation', async () => {
+    const t = lifecycleApi();
+    const manager = createOffscreenManager(t.api, recordingLogger().log);
+    const first = manager.ensureOffscreen();
+    expect(manager.ensureOffscreen()).toBe(first);
+    await first;
+    expect(t.events).toEqual(['create doc-1']);
+  });
+
+  it('a failed creation does not block the queue', async () => {
+    const t = lifecycleApi();
+    const manager = createOffscreenManager(
+      { ...t.api, createDocument: async () => Promise.reject(new Error('boom')) },
+      recordingLogger().log,
+    );
+    await expect(manager.ensureOffscreen()).rejects.toThrow('boom');
+    await expect(manager.closeOffscreen()).resolves.toBeUndefined();
+  });
+});
+
 describe('chromeOffscreenApi', () => {
   const fake = createChromeFake();
   afterEach(() => fake.uninstall());
@@ -142,5 +265,18 @@ describe('chromeOffscreenApi', () => {
       justification: OFFSCREEN_JUSTIFICATION,
     });
     expect(await api.hasDocument()).toBe(true);
+  });
+
+  it('reads the current document\'s id and closes it', async () => {
+    const own = createChromeFake(); // the fake above already holds a document
+    own.install();
+    const api = chromeOffscreenApi();
+    expect(await api.currentDocumentId()).toBeNull();
+    await api.createDocument();
+    expect(await api.currentDocumentId()).toBe('doc-1');
+    await api.closeDocument();
+    expect(own.closeDocumentCalls).toBe(1);
+    expect(await api.hasDocument()).toBe(false);
+    own.uninstall();
   });
 });
