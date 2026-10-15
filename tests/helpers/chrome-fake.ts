@@ -93,6 +93,8 @@ export interface ChromeFake {
   /** chrome.notifications.getPermissionLevel() answer ("denied" = blocked in Chrome). */
   notificationLevel: 'granted' | 'denied';
   readonly onNotificationLevelChanged: FakeEvent<(level: 'granted' | 'denied') => void>;
+  /** chrome.notifications.onClicked – dispatch(id) simulates a click on a notification. */
+  readonly onNotificationClicked: FakeEvent<(notificationId: string) => void>;
   /** Notifications currently shown, by id (create with an existing id replaces). */
   readonly notifications: Map<string, chrome.notifications.NotificationCreateOptions>;
   /** Puts the fake on globalThis.chrome. */
@@ -121,6 +123,7 @@ export function createChromeFake(): ChromeFake {
   const scriptingCalls: ChromeFake['scriptingCalls'] = [];
   const notifications = new Map<string, chrome.notifications.NotificationCreateOptions>();
   const onNotificationLevelChanged = createFakeEvent<(level: 'granted' | 'denied') => void>();
+  const onNotificationClicked = createFakeEvent<(notificationId: string) => void>();
 
   const getURL = (path: string) => `chrome-extension://${FAKE_EXTENSION_ID}/${path.replace(/^\//, '')}`;
 
@@ -151,6 +154,7 @@ export function createChromeFake(): ChromeFake {
     notifications,
     notificationLevel: 'granted',
     onNotificationLevelChanged,
+    onNotificationClicked,
     install: () => void Reflect.set(globalThis, 'chrome', fake.chrome),
     uninstall: () => void Reflect.deleteProperty(globalThis, 'chrome'),
   };
@@ -285,6 +289,10 @@ export function createChromeFake(): ChromeFake {
       return fake.notificationLevel;
     },
     onPermissionLevelChanged: onNotificationLevelChanged,
+    onClicked: onNotificationClicked,
+    async clear(id: string) {
+      return notifications.delete(id);
+    },
   };
 
   // chrome.i18n.getMessage over the real catalogue: "" for unknown keys, $1… substitutions.

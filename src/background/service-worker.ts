@@ -65,6 +65,8 @@ chrome.notifications
   .then((level) => logNotificationPermission(level, log))
   .catch(() => {});
 chrome.notifications.onPermissionLevelChanged.addListener((level) => logNotificationPermission(level, log));
+// "isn't set up" / "APP-ID rejected" → the settings.
+chrome.notifications.onClicked.addListener((notificationId) => void notifier.onClicked(notificationId));
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   void settings.onStorageChanged(changes, areaName);
@@ -91,6 +93,11 @@ chrome.runtime.onMessage.addListener((raw, sender, sendResponse) => {
   if (message?.type === 'SHOW_RESULT' && isFromOffscreen(sender, extensionId, chrome.runtime.getURL(OFFSCREEN_PATH))) {
     void notifier.showResult(message);
     return false; // display only, no reply
+  }
+
+  if (message?.type === 'SCAN_INTERRUPTED' && isFromContentScript(sender, extensionId)) {
+    void notifier.showInterrupted(message);
+    return false;
   }
 
   return false;

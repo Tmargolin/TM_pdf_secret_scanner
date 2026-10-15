@@ -6,6 +6,11 @@
 //   files with secrets           → one "secrets" notification
 //   files not (fully) checked    → one "failed" notification
 //   both in one batch (D39)      → both notifications
+//   no APP-ID (NOT_CONFIGURED)   → one "isn't set up" notification (always the
+//                                  same id, so batches don't pile them up)
+//   scan interrupted (from the content script) → a "failed" notification
+// "isn't set up" and "APP-ID rejected" open the settings when clicked
+// (opensSettings(id)) – the id carries this, as the service worker keeps no state.
 // A file with secrets whose text was only partly checked belongs to the
 // secrets notification, with notes on what was not checked.
 //
@@ -16,7 +21,7 @@
 
 import type { GetMessage } from '../shared/i18n.ts';
 import { errorMessageKey } from '../shared/i18n.ts';
-import type { ShowResult } from '../shared/messages.ts';
+import type { ScanInterrupted, ShowResult } from '../shared/messages.ts';
 import type { MaskedFinding, ScanResult } from '../shared/types.ts';
 
 export const FILE_NAME_MAX_CHARS = 60;
@@ -29,9 +34,18 @@ export const MAX_PAGES_SHOWN = 5;
 
 export interface NotificationSpec {
   id: string;
-  kind: 'secrets' | 'failed';
+  kind: 'secrets' | 'failed' | 'not-configured';
   title: string;
   message: string;
+}
+
+/** One for all batches: a second unconfigured upload replaces it instead of adding one. */
+export const NOT_CONFIGURED_ID = 'not-configured';
+const SETTINGS_SUFFIX = '-settings';
+
+/** True for the notifications whose click opens the settings. */
+export function opensSettings(notificationId: string): boolean {
+  return notificationId === NOT_CONFIGURED_ID || notificationId.endsWith(SETTINGS_SUFFIX);
 }
 
 /** The site as people read it: "mail.google.com" (port kept if any). */
@@ -113,25 +127,54 @@ function secretsNotification(message: ShowResult, files: ScanResult[], t: GetMes
 
 function failedNotification(message: ShowResult, files: ScanResult[], t: GetMessage): NotificationSpec {
   const first = files[0] as ScanResult;
+  // A rejected APP-ID is fixed in the settings: that notification opens them.
+  const unauthorized = files.some((file) => file.errors.some((e) => e.code === 'API_UNAUTHORIZED'));
+  const id = `batch-${message.batchId}-failed${unauthorized ? SETTINGS_SUFFIX : ''}`;
   if (files.length === 1) {
-    const unauthorized = first.errors.some((e) => e.code === 'API_UNAUTHORIZED');
     const title = t(unauthorized ? 'titleUnauthorized' : 'titleFailedOne', [displayFileName(first.fileName)]);
-    return { id: `batch-${message.batchId}-failed`, kind: 'failed', title, message: reasons(first, t).join('\n') };
+    return { id, kind: 'failed', title, message: reasons(first, t).join('\n') };
   }
   const title = t('titleFailedMany', [String(files.length), String(message.results.length)]);
   const lines = files
     .slice(0, MAX_FILES_SHOWN)
     .map((file) => t('fileReason', [displayFileName(file.fileName), reasons(file, t)[0] ?? '']));
   if (files.length > MAX_FILES_SHOWN) lines.push(t('findingsMore', [String(files.length - MAX_FILES_SHOWN)]));
-  return { id: `batch-${message.batchId}-failed`, kind: 'failed', title, message: lines.join('\n') };
+  return { id, kind: 'failed', title, message: lines.join('\n') };
+}
+
+function notConfiguredNotification(t: GetMessage): NotificationSpec {
+  return { id: NOT_CONFIGURED_ID, kind: 'not-configured', title: t('titleNotConfigured'), message: t('notConfiguredMessage') };
 }
 
 /** The 0, 1 or 2 notifications for one batch. */
 export function notificationsFor(message: ShowResult, t: GetMessage): NotificationSpec[] {
+  const notConfigured = (r: ScanResult) => r.errors.some((e) => e.code === 'NOT_CONFIGURED');
   const withSecrets = message.results.filter((r) => r.status === 'secrets');
-  const failed = message.results.filter((r) => r.status === 'error');
+  const failed = message.results.filter((r) => r.status === 'error' && !notConfigured(r));
   const specs: NotificationSpec[] = [];
   if (withSecrets.length > 0) specs.push(secretsNotification(message, withSecrets, t));
   if (failed.length > 0) specs.push(failedNotification(message, failed, t));
+  if (message.results.some(notConfigured)) specs.push(notConfiguredNotification(t));
   return specs;
+}
+
+/**
+ * The scan port dropped before the batch finished (content script → SCAN_INTERRUPTED):
+ * those files were not checked. Same id as the batch's "failed" notification, so a
+ * result that still arrives replaces it.
+ */
+export function interruptedNotification(message: ScanInterrupted, t: GetMessage): NotificationSpec {
+  const names = message.fileNames.map(displayFileName);
+  const reason = t('error_SCAN_INTERRUPTED');
+  if (names.length === 1) {
+    return { id: `batch-${message.batchId}-failed`, kind: 'failed', title: t('titleInterrupted', [names[0] as string]), message: reason };
+  }
+  const lines = names.slice(0, MAX_FILES_SHOWN).map((name) => t('fileReason', [name, reason]));
+  if (names.length > MAX_FILES_SHOWN) lines.push(t('findingsMore', [String(names.length - MAX_FILES_SHOWN)]));
+  return {
+    id: `batch-${message.batchId}-failed`,
+    kind: 'failed',
+    title: t('titleFailedMany', [String(names.length), String(names.length)]),
+    message: lines.join('\n'),
+  };
 }

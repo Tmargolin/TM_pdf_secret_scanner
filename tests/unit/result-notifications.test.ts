@@ -112,7 +112,8 @@ describe('secrets – several files', () => {
 });
 
 describe('not fully checked – one file', () => {
-  const plain = ERROR_CODES.filter((code) => code !== 'TEXT_TRUNCATED' && code !== 'API_UNAUTHORIZED');
+  // NOT_CONFIGURED has its own notification (7.3).
+  const plain = ERROR_CODES.filter((code) => !['TEXT_TRUNCATED', 'API_UNAUTHORIZED', 'NOT_CONFIGURED'].includes(code));
 
   it.each(plain)('%s: "Couldn\'t fully scan", with its reason', (code: ErrorCode) => {
     const spec = one(batch(failed('report.pdf', code)));
