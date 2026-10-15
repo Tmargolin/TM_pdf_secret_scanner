@@ -370,7 +370,8 @@ notifications.
 
 **On your machine**
 - The **APP-ID** is stored unencrypted in the Chrome profile
-  (`chrome.storage.local`). Never commit it anywhere.
+  (`chrome.storage.local`). Never commit it anywhere. (Also under *Towards
+  production → Security*, as something to improve before a release.)
 - PDF text and secret values are kept **in memory only**, for the time of the
   scan; they are never stored or logged. Notifications show secrets masked
   (first 4 and last 2 characters, or `••••••` below 12 characters).
@@ -390,7 +391,9 @@ notifications.
 - Messages are accepted only from the expected parts of the extension and
   are type- and size-checked; web pages cannot message the extension.
 
-**Known, not handled in this version**
+**Known, not handled in this version** (both also appear under *Towards
+production* – here as a risk of today's version, there as work to do before a
+release)
 - A hostile page could flood the extension with files (API quota, CPU,
   notifications); there is no per-tab rate limit.
 - Enterprise deployment via managed storage (`chrome.storage.managed`) is not
@@ -416,6 +419,8 @@ notifications.
   checked.
 - Only allow-listed sites are protected; open tabs need a reload after the
   list changes.
+- English only. All texts are in `_locales/en/messages.json`; other languages
+  can be added without code changes.
 
 ## Testing
 
@@ -438,7 +443,10 @@ test page with the **dev build**:
 | `npm run fixtures` | Regenerates the sample PDFs in `tests/fixtures/` (a test checks they match) |
 
 **Planned:** automated end-to-end tests with Playwright – Chromium launched
-with the extension loaded, local test pages and a mock API.
+with the extension loaded, local test pages and a mock API. (Also listed under
+*Towards production → Tests that are still missing*: here as part of the test
+plan, there because a release should not depend on checking the whole chain by
+hand.)
 
 ### Known gaps in test coverage
 
@@ -506,15 +514,171 @@ with the extension loaded, local test pages and a mock API.
   node scripts/probe-api.mjs
   ```
 
+## Towards production
+
+The extension works and is tested, but it is a one-developer project, written
+with an AI coding assistant, without outside review. Before it is given to
+users who rely on it, at least the following is missing.
+
+**1. An independent code review – the minimum.** Nobody but the author has
+read the code; no change went through a pull-request review. A reviewer who
+knows Chrome extensions should read at least the parts where a mistake leaks
+data or hides a secret:
+
+| Area | Why it matters | Where |
+|---|---|---|
+| Hooks in the page | Run inside every allow-listed site; must never change what the page gets or break it | `src/main-world/` |
+| Message validation and sender checks | The only barrier against a hostile page or another extension | `src/shared/messages.ts`, every `onMessage` / `onConnect` |
+| Logging, masking | A slip prints PDF text, an unmasked secret or the APP-ID | `src/shared/safe-logger.ts`, `src/scanner/mask.ts` |
+| Result rules | A bug here reports unchecked text as clean | `src/scanner/aggregate.ts`, `splitter.ts`, `parse.ts` |
+| Offscreen lifecycle | A race here loses an accepted scan | `src/offscreen/idle-monitor.ts`, `src/background/offscreen-manager.ts`, `src/content/scan-sender.ts` |
+| Manifest and release build | Permissions, CSP, no localhost, no source maps | `scripts/manifest.ts`, `scripts/release.ts` |
+
+From then on, every change to `main` goes through a pull request with one
+reviewer and required CI checks.
+
+**2. Tests that are still missing**
+- Automated end-to-end tests: Chromium with the extension loaded, test pages,
+  mock API. Today the whole chain is only checked by hand. (How they would
+  work: *Testing → Planned* and DESIGN.md §12; listed here because they are a
+  release requirement.)
+- The gaps listed under *Known gaps in test coverage*.
+- More real sites (e.g. Outlook, Slack, Teams, WhatsApp Web) and Edge.
+- Other operating systems: every manual test so far ran on **Windows only**.
+  macOS and Linux (and ChromeOS) need the same checks – above all the
+  notifications, whose look, persistence and blocking settings differ per OS
+  (see Requirements), and file pickers and drag & drop from the OS file
+  manager.
+- A set of realistic but inactive secrets (cloud keys, tokens, private keys)
+  to measure what the vendor actually detects – so far only AWS keys were
+  confirmed.
+
+**3. Security**
+- A security review of the PDF path: pdf.js parses untrusted files with
+  extension privileges (fuzzing, review of its settings).
+- A per-tab rate limit, so a hostile page cannot use up the API quota.
+- The APP-ID is stored unencrypted in the Chrome profile.
+
+The rate limit and the APP-ID storage are also stated under *Privacy and
+security*: there as facts users must know about this version, here as work to
+do before a release.
+
+**4. Vendor and data**
+- A data-processing agreement with Prompt Security: retention and logging of
+  the text we send are unknown today.
+- Written confirmation of the API limits we found by probing (silent stop
+  after ~128–256k characters, no reported size error) and of rate limits under
+  real load – only 20 parallel requests were tried.
+
+**5. Distribution and operations**
+- Chrome Web Store listing: privacy policy and data-use disclosure (full PDF
+  text goes to a third party), store review.
+- Enterprise deployment: managed storage for the APP-ID and the site list,
+  forced install by policy (`chrome.storage.managed`). (Also under *Privacy
+  and security → Known, not handled*, where it is stated as missing today.)
+- A release process: changelog, signed tags, a way to roll back.
+- Telemetry – reports back to us about real-world issues. Today failures are
+  visible only in the extension's consoles on the user's machine, so we learn
+  about a problem only if a user tells us. A small reporting service could
+  collect, per scan:
+  - outcome and error codes (`API_TIMEOUT`, `PDF_INVALID`, `SCAN_INTERRUPTED`…),
+    timings, page / chunk / character counts, retries and resends;
+  - extension, Chrome and OS versions;
+  - never file names, PDF text, secrets (not even masked), the APP-ID or page
+    URLs. The site at most as its domain, and only if the user agrees.
+
+  This would show which PDFs pdf.js cannot read, how often the API times out
+  or a scan is interrupted, on which sites errors cluster, and whether the
+  limits fit real files. (A file the hooks never saw cannot be reported – a
+  missed detection stays invisible to telemetry.) Conditions: **opt-in** (or switched on by the organisation's
+  policy), visible in the options page, sent in batches without a user ID,
+  kept for a limited time. It changes the privacy promise "no analytics or
+  telemetry" – the README, the store's data-use disclosure and the privacy
+  policy must say so before it ships.
+
+**6. Product gaps users will notice** – the items under *Known limitations*
+and *Future options*. None of them blocks a release, but each should be a
+conscious decision, stated to users.
+
+## Scaling and performance
+
+What is slow today, measured or by design: every PDF is parsed in full and
+every part is sent to the API, also when the same file is added again; files
+travel as base64 in one message; all parsing shares one pdf.js worker
+thread. Suggestions, roughly by benefit:
+
+**1. Cache results by file content.** The same file is often added several
+times – to several sites, after a page reload, again after a failed send. Key
+a cache on the SHA-256 of the PDF's bytes (`crypto.subtle.digest` in the
+offscreen document, ~50–100 ms for 25 MB) and keep only what the
+notification needs: status and **masked** findings – never text or secrets.
+- On a hit: no parsing, no API call; the notification is shown at once.
+- Store only complete results (`clean` or `secrets` with every part checked).
+  Never cache errors, partial or truncated scans.
+- Key also on what changes the answer: API URL, APP-ID (hashed), chunk
+  settings and a cache-format version. Clear on any settings change.
+- Expire entries (e.g. after 24 h) – the vendor's detection improves, and a
+  file once clean may not stay clean. Cap the size (e.g. 1,000 entries, least
+  recently used first).
+- Where: an in-memory map is lost when the offscreen document closes when idle
+  (60 s). `chrome.storage.session` (memory only, cleared when Chrome closes)
+  survives that; the offscreen document cannot read it, so the service worker
+  would hold it, as it does for the settings. Avoid persistent storage
+  (IndexedDB): a list of hashes is a history of what the user uploaded.
+
+**2. Cache parts, not only files.** An edited version of a document has a new
+hash but mostly the same text. Caching results per chunk (hash of the chunk's
+text → findings) re-sends only the changed parts. This needs a change to the
+chunker: today each chunk's end is searched from where the previous chunk
+ended, so one inserted line shifts every later chunk and nothing matches.
+Content-defined boundaries – cut at a paragraph break where a rolling hash of
+the text meets a condition – line up again right after the edit. Same rules as
+above (memory only, no text kept, expiry).
+
+**3. A shared cache for an organisation.** Many people attach the same
+templates and reports. A small service in front of the API could keep the
+hash → result cache for everyone, so each document is checked once per
+organisation. Costs: a server to run, and hashes reveal who sent which known
+document – this needs a privacy review and belongs with the vendor contract.
+
+**4. Stream instead of whole files.**
+- Scan pages while pdf.js is still reading the next ones, instead of
+  extracting the whole document first: the first API calls start earlier and
+  the full text is never held at once.
+- Show the secrets notification as soon as the first secret is found, and
+  update it when the scan ends – the user can remove the file sooner.
+- Send large files in several messages instead of one base64 message:
+  lowers peak memory and lifts the 45 MB limit.
+
+**5. Use more CPU for parsing.** All PDFs share one pdf.js worker thread, so
+*Parallel PDF extractions* only overlaps waiting, not work. A small pool of
+workers (one per CPU core, up to the setting) would parse several large files
+truly in parallel.
+
+**6. Adapt to the API.** Instead of a fixed number of parallel requests (4),
+raise it while answers are fast and lower it after a 429 or timeouts (as TCP
+does). If the vendor offers a batch endpoint (several texts per request), use
+it for the many small chunks of a long document.
+
+**7. A local pre-check – with care.** A fast local scan (patterns, high
+entropy) could put chunks with likely secrets first, so a positive result
+arrives sooner. It must not *skip* the other chunks: the vendor's detection is
+the source of truth, and a local filter would miss what it does not know.
+
+**Measure first.** Each result already records pages, chunks, characters and
+time (`stats`). A benchmark set of large and many-file uploads, run before and
+after each change, shows which of these is worth its complexity.
+
 ## Future options
+
+Features that could come later. Work needed before a production release
+(end-to-end tests, rate limiting, managed storage, telemetry …) is under
+*Towards production*; performance ideas under *Scaling and performance*.
 
 - Event-listener safety net for upload detection
 - Text clean-up before chunking
 - Details page / recent-scans history
-- Enterprise deployment via managed storage
-- Per-tab rate limiting
 - OCR for scanned PDFs, other file types
-- Automated end-to-end tests with Playwright
 - Toolbar badge ("!" on the extension icon) when notifications are blocked in
   Chrome (blocking by the operating system cannot be detected)
 - Per-site access status in the options page. A site is scanned only when it
@@ -525,5 +689,5 @@ with the extension loaded, local test pages and a mock API.
 
 ## For developers and AI agents
 
-- [DESIGN.md](DESIGN.md) – architecture, decisions, plan
+- [DESIGN.md](DESIGN.md) – architecture and decisions
 - [AGENTS.md](AGENTS.md) – entry point for AI coding agents
