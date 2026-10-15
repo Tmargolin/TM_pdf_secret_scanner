@@ -39,10 +39,13 @@ beforeEach(() => {
   vi.spyOn(console, 'info').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
+  // Never the real API from a test (docs/agents/testing.md).
+  vi.stubGlobal('fetch', () => Promise.reject(new Error('the real API must not be called from tests')));
 });
 
 afterEach(() => {
   fake.uninstall();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
@@ -144,9 +147,9 @@ describe('scan port (content script → offscreen document, direct)', () => {
           scanId: '5f1c2a3e-1111-4222-8333-944455556666',
           batchId: BATCH_ID,
           fileName: 'a.pdf',
-          status: 'error', // "abc" is not a PDF
+          status: 'error', // no APP-ID in these settings: nothing is extracted or sent
           findings: [],
-          errors: [{ code: 'PDF_INVALID' }],
+          errors: [{ code: 'NOT_CONFIGURED' }],
         },
       ],
     });
@@ -158,7 +161,7 @@ describe('scan port (content script → offscreen document, direct)', () => {
     expect(workerOptions.workerSrc).toBe(`chrome-extension://${FAKE_EXTENSION_ID}/offscreen/pdf.worker.mjs`);
   });
 
-  it('a real PDF is extracted (placeholder result until scanning); dev logs codes only', async () => {
+  it('not configured: the result says so; dev logs codes only', async () => {
     const bytes = readFileSync(new URL('../fixtures/one-page.pdf', import.meta.url));
     const pdf = {
       type: 'SCAN_REQUEST' as const,
@@ -172,9 +175,9 @@ describe('scan port (content script → offscreen document, direct)', () => {
     await loadOffscreenPage();
     await contentScript().send({ batchId: BATCH_ID, requests: [pdf] });
     expect(fake.sentMessages).toContainEqual(
-      expect.objectContaining({ type: 'SHOW_RESULT', results: [expect.objectContaining({ fileName: 'secret-plans.pdf', status: 'clean' })] }),
+      expect.objectContaining({ type: 'SHOW_RESULT', results: [expect.objectContaining({ fileName: 'secret-plans.pdf', status: 'error' })] }),
     );
-    expect(console.debug).toHaveBeenCalledWith('[PSS:offscreen] batch finished', { outcomes: ['clean'] });
+    expect(console.debug).toHaveBeenCalledWith('[PSS:offscreen] batch finished', { outcomes: ['NOT_CONFIGURED'] });
     expect(JSON.stringify(vi.mocked(console.debug).mock.calls)).not.toContain('secret-plans');
   });
 

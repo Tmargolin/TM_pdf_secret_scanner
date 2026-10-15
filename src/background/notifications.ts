@@ -40,7 +40,7 @@ export function siteName(origin: string): string {
 
 export function createNotifier(api: NotificationApi, log: Logger) {
   return {
-    /** Skeleton: says a batch arrived and that nothing was checked yet. */
+    /** Skeleton: says a batch arrived; the real result texts arrive in step 7. */
     async showBatchReceived(message: ShowResult): Promise<void> {
       try {
         // One notification per batch: the same id replaces, never duplicates.

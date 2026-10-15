@@ -378,7 +378,7 @@ describe('SHOW_RESULT → notification', () => {
     expect(returned).toBe(false);
     expect(sendResponse).not.toHaveBeenCalled();
     expect(fake.notifications.get(`batch-${BATCH_ID}`)?.message).toBe(
-      'Received 1 file(s) from localhost:8787. Scanning is not implemented yet – nothing was checked.',
+      'Received 1 file(s) from localhost:8787. Results are not shown in notifications yet.',
     );
   });
 

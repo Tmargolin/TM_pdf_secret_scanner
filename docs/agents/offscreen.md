@@ -5,8 +5,8 @@ Files: `src/offscreen/offscreen.html`, `offscreen.ts` (wiring), `jobs.ts`
 (`createJobRegistry`: admission, queue cap, FIFO start by size, timeout,
 isolation), `extractor.ts` (`createExtractor`: `maxParallelExtractions`, one
 shared pdf.js worker), `limiter.ts` (`createLimiter`: FIFO concurrency
-limit, abortable wait), `results.ts` (`toShowResult`, `extractionOutcome`,
-`placeholderOutcome`), `batch-receiver.ts` (scan port: collect batch, `BATCH_ACCEPTED`,
+limit, abortable wait), `scan-job.ts` (`createScanJob`: the work per job – the
+scan pipeline), `results.ts` (`toShowResult`, `outcomeCode` for the dev log), `batch-receiver.ts` (scan port: collect batch, `BATCH_ACCEPTED`,
 `runBatch`, `BATCH_DONE`, close), `settings-client.ts` (settings cache); uses
 `src/scanner/*`
 Design: `DESIGN.md` §2, §4, §4.1
@@ -27,9 +27,9 @@ Design: `DESIGN.md` §2, §4, §4.1
   received; `BATCH_DONE` when every job of the batch ended, then
   `port.disconnect()`.
 - `SHOW_RESULT` (one per batch, masked findings only) → service worker, sent
-  before `BATCH_DONE`. Built in `results.ts` (step 2: `placeholderResults` –
-  too-large files `FILE_TOO_LARGE`, others unscanned).
-- `fetch` to the API (via `src/scanner/api-client.ts`).
+  before `BATCH_DONE`. Built in `results.ts` from the job results.
+- `fetch` to the API (via `src/scanner/api-client.ts`), at most
+  `maxConcurrency` at once across all jobs.
 
 ## Job model
 `{ scanId, batchId, fileName, size, origin, tabId, frameId, state }`,
@@ -44,8 +44,13 @@ states `queued → running → done | failed`. `submitBatch(batch)` → one
   aborted; the work must stop.
 - Exception in a job → `SCAN_INTERRUPTED` for that job only (D38).
 - Bytes released when the job starts work / ends.
-- Work per job: `extractor.extract(bytes, signal)` → PDF error code, or
-  (until step 6) `placeholderOutcome`; the text is dropped.
+- Work per job (`scan-job.ts`, settings read once per job): empty APP-ID →
+  `NOT_CONFIGURED` (nothing extracted or sent); extract → PDF error code;
+  `joinPages` → `truncateText` (`TEXT_TRUNCATED`) → `chunkText` at the
+  session's effective size (`createChunkSizer`) → every chunk at once through
+  `scanWithSplitting` → the one shared `createApiLimiter(maxConcurrency)` (key:
+  `scanId`) → `scanChunk` → `aggregateFindings` → `scanStatus` + stats. The
+  text and plain secrets never leave the call; logs carry counts only.
 - `maxParallelExtractions` PDFs parsed at once (`limiter.ts`, FIFO, read at
   every start); a job that times out while waiting leaves the queue, one that
   times out while parsing has its pdf.js document destroyed.

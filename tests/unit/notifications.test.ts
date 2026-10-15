@@ -49,7 +49,7 @@ describe('skeleton batch notification', () => {
           type: 'basic',
           iconUrl: `chrome-extension://${FAKE_EXTENSION_ID}/${ICON_PATH}`,
           title: 'PDF Secret Scanner (preview)',
-          message: 'Received 2 file(s) from mail.google.com. Scanning is not implemented yet – nothing was checked.',
+          message: 'Received 2 file(s) from mail.google.com. Results are not shown in notifications yet.',
         },
       ],
     ]);

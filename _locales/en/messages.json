@@ -10,7 +10,7 @@
     "description": "Walking-skeleton notification title; replaced by the result notifications in step 7."
   },
   "skeletonBatchMessage": {
-    "message": "Received $COUNT$ file(s) from $SITE$. Scanning is not implemented yet – nothing was checked.",
+    "message": "Received $COUNT$ file(s) from $SITE$. Results are not shown in notifications yet.",
     "description": "Walking-skeleton notification; replaced in step 7.",
     "placeholders": {
       "count": {
