@@ -22,5 +22,245 @@
         "example": "mail.google.com"
       }
     }
+  },
+  "titleSecretsOne": {
+    "message": "Secrets found in $FILE$",
+    "description": "Notification title: one file of the batch contains secrets.",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "titleSecretsMany": {
+    "message": "$COUNT$ of $TOTAL$ files contain secrets",
+    "description": "Notification title: several files were added at once and some contain secrets.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "2"
+      },
+      "total": {
+        "content": "$2",
+        "example": "3"
+      }
+    }
+  },
+  "titleFailedOne": {
+    "message": "Couldn't fully scan $FILE$",
+    "description": "Notification title: a file could not be checked, or only partly (no secret found in what was checked).",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "titleFailedMany": {
+    "message": "Couldn't fully scan $COUNT$ of $TOTAL$ files",
+    "description": "Notification title: several files, some could not be checked fully (no secrets found).",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "2"
+      },
+      "total": {
+        "content": "$2",
+        "example": "3"
+      }
+    }
+  },
+  "titleUnauthorized": {
+    "message": "Couldn't scan $FILE$",
+    "description": "Notification title: the API rejected the APP-ID.",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "titleNotConfigured": {
+    "message": "PDF Secret Scanner isn't set up",
+    "description": "Notification title: no APP-ID entered yet."
+  },
+  "titleInterrupted": {
+    "message": "The scan of $FILE$ was interrupted",
+    "description": "Notification title: the scan stopped before a result (offscreen document gone).",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "report.pdf"
+      }
+    }
+  },
+  "secretsAddedOne": {
+    "message": "You added it to $SITE$.",
+    "description": "Start of the secrets message (one file).",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "mail.google.com"
+      }
+    }
+  },
+  "secretsAddedMany": {
+    "message": "You added them to $SITE$.",
+    "description": "Start of the secrets message (several files).",
+    "placeholders": {
+      "site": {
+        "content": "$1",
+        "example": "mail.google.com"
+      }
+    }
+  },
+  "findingWithPages": {
+    "message": "$TYPE$ (p. $PAGES$) $MASKED$",
+    "description": "One finding: entity type, page numbers, masked value.",
+    "placeholders": {
+      "type": {
+        "content": "$1",
+        "example": "AWS credentials"
+      },
+      "pages": {
+        "content": "$2",
+        "example": "3, 5"
+      },
+      "masked": {
+        "content": "$3",
+        "example": "AKIA…B1"
+      }
+    }
+  },
+  "findingNoPages": {
+    "message": "$TYPE$ $MASKED$",
+    "description": "One finding whose page is not known.",
+    "placeholders": {
+      "type": {
+        "content": "$1",
+        "example": "AWS credentials"
+      },
+      "masked": {
+        "content": "$2",
+        "example": "AKIA…B1"
+      }
+    }
+  },
+  "findingsMore": {
+    "message": "+$COUNT$ more",
+    "description": "After the first 3 findings.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "secretsAdvice": {
+    "message": "Remove the file and rotate the credentials.",
+    "description": "End of the secrets message."
+  },
+  "partsNotScanned": {
+    "message": "$COUNT$ of $TOTAL$ parts could not be scanned.",
+    "description": "Added to a result when some chunks failed.",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "1"
+      },
+      "total": {
+        "content": "$2",
+        "example": "4"
+      }
+    }
+  },
+  "fileReason": {
+    "message": "$FILE$: $REASON$",
+    "description": "One line per file in a several-files message.",
+    "placeholders": {
+      "file": {
+        "content": "$1",
+        "example": "report.pdf"
+      },
+      "reason": {
+        "content": "$2",
+        "example": "The PDF is password-protected – it was not checked."
+      }
+    }
+  },
+  "notConfiguredMessage": {
+    "message": "Click to add your APP-ID.",
+    "description": "Message of the not-configured notification; clicking opens the settings."
+  },
+  "error_NOT_CONFIGURED": {
+    "message": "PDF Secret Scanner has no APP-ID yet – the file was not checked.",
+    "description": "Reason shown for error code NOT_CONFIGURED."
+  },
+  "error_FILE_TOO_LARGE": {
+    "message": "The file is larger than the size limit – it was not checked.",
+    "description": "Reason shown for error code FILE_TOO_LARGE."
+  },
+  "error_PDF_ENCRYPTED": {
+    "message": "The PDF is password-protected – it was not checked.",
+    "description": "Reason shown for error code PDF_ENCRYPTED."
+  },
+  "error_PDF_INVALID": {
+    "message": "The PDF could not be read – it was not checked.",
+    "description": "Reason shown for error code PDF_INVALID."
+  },
+  "error_NO_TEXT_LAYER": {
+    "message": "The PDF has no text (for example a scan) – it was not checked.",
+    "description": "Reason shown for error code NO_TEXT_LAYER."
+  },
+  "error_API_UNREACHABLE": {
+    "message": "The scanning service could not be reached – the file was not checked.",
+    "description": "Reason shown for error code API_UNREACHABLE."
+  },
+  "error_API_TIMEOUT": {
+    "message": "The scanning service did not answer in time – the file was not fully checked.",
+    "description": "Reason shown for error code API_TIMEOUT."
+  },
+  "error_API_HTTP_ERROR": {
+    "message": "The scanning service returned an error – the file was not fully checked.",
+    "description": "Reason shown for error code API_HTTP_ERROR."
+  },
+  "error_API_BAD_RESPONSE": {
+    "message": "The scanning service gave an unexpected answer – the file was not fully checked.",
+    "description": "Reason shown for error code API_BAD_RESPONSE."
+  },
+  "error_API_UNAUTHORIZED": {
+    "message": "Your APP-ID was rejected – check the extension settings.",
+    "description": "Reason shown for error code API_UNAUTHORIZED."
+  },
+  "error_SCAN_INTERRUPTED": {
+    "message": "The scan was interrupted – the file was not checked.",
+    "description": "Reason shown for error code SCAN_INTERRUPTED."
+  },
+  "error_SCAN_TIMEOUT": {
+    "message": "The scan took too long and was stopped – the file was not fully checked.",
+    "description": "Reason shown for error code SCAN_TIMEOUT."
+  },
+  "error_TEXT_TRUNCATED": {
+    "message": "Only the first $SCANNED$ of $TOTAL$ characters were checked.",
+    "description": "Reason shown for error code TEXT_TRUNCATED.",
+    "placeholders": {
+      "scanned": {
+        "content": "$1",
+        "example": "2,000,000"
+      },
+      "total": {
+        "content": "$2",
+        "example": "3,500,000"
+      }
+    }
+  },
+  "error_CHUNK_TOO_LARGE": {
+    "message": "Part of the text could not be scanned.",
+    "description": "Reason shown for error code CHUNK_TOO_LARGE."
+  },
+  "error_QUEUE_FULL": {
+    "message": "Too many files at once – this file was not checked. Try again in a moment.",
+    "description": "Reason shown for error code QUEUE_FULL."
   }
 }

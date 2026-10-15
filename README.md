@@ -65,6 +65,71 @@ does not show this. Adding it again answers "already on the list". To restore
 scanning, **Remove** the site in the options page and **add** it again. To be
 addressed by the planned per-site access status (see Future options).
 
+## Notifications – what each one means
+
+*Texts added in step 7.1; shown from step 7.2. Until then a preview
+notification ("Received N file(s) from …") appears for every batch.*
+
+**When.** One Chrome notification per user action (one batch – e.g. three PDFs
+picked at once give one notification), only for PDFs added to sites on the
+allow list. A file that was checked completely and contains no secret gives
+**no** notification. Notifications about secrets and failures stay on screen
+until you dismiss them (where the operating system allows it). If Chrome's
+notifications are switched off in the operating system, nothing is shown
+(see Requirements). All texts live in `_locales/en/messages.json`.
+
+**Secret values are never shown in full.** A value of 12 characters or more is
+shown as its first 4 and last 2 characters (`AKIA…LE`); a shorter one, or one
+the service did not return, as `••••••`.
+
+### By result status
+
+Every file ends in one of three statuses; the notification follows from them.
+
+| Status | When | Title | Message |
+|---|---|---|---|
+| `clean` | Every part of the text was checked and no secret was found | – | No notification |
+| `secrets` | At least one secret was found (even if other parts could not be checked) | **Secrets found in report.pdf** – or, for several files, **2 of 3 files contain secrets** | **You added it to mail.google.com.** (*them* for several files), then up to 3 findings – **AWS credentials (p. 3) AKIA…LE** – then **+N more** if there are more, any notes on unchecked text (below), and **Remove the file and rotate the credentials.** |
+| `error` | No secret was found, but some or all of the text could **not** be checked – it is never reported as clean | **Couldn't fully scan report.pdf** – or **Couldn't fully scan 2 of 3 files** | The reason (table below); for several files one line per file: **report.pdf: The PDF is password-protected – it was not checked.** |
+
+Notes added to a secrets message when part of the file was not checked:
+**1 of 4 parts could not be scanned.** and/or **Only the first 2,000,000 of
+3,500,000 characters were checked.**
+
+**A batch with both kinds gives two notifications:** one about the files with
+secrets, and one about the files that could not be (fully) checked, so the
+urgent alert is never mixed with failures and no failure is hidden. (A single
+file with secrets whose text was only partly checked gives one secrets
+notification with the notes above.)
+
+### Special notifications
+
+| Case | Title | Message | Click |
+|---|---|---|---|
+| No APP-ID entered yet | **PDF Secret Scanner isn't set up** | **Click to add your APP-ID.** | Opens the settings |
+| The scanning service rejected the APP-ID | **Couldn't scan report.pdf** | **Your APP-ID was rejected – check the extension settings.** | Opens the settings |
+| The scan stopped before a result (the extension's background page was restarted) | **The scan of report.pdf was interrupted** | **The scan was interrupted – the file was not checked.** | – |
+
+### Reasons (error codes)
+
+| Code | Text | What it means / what to do |
+|---|---|---|
+| `NOT_CONFIGURED` | PDF Secret Scanner has no APP-ID yet – the file was not checked. | Enter the APP-ID in the settings. |
+| `FILE_TOO_LARGE` | The file is larger than the size limit – it was not checked. | Above *Maximum PDF size* (settings, default 25 MB). |
+| `PDF_ENCRYPTED` | The PDF is password-protected – it was not checked. | The text cannot be read without the password. |
+| `PDF_INVALID` | The PDF could not be read – it was not checked. | Damaged, truncated or not really a PDF. |
+| `NO_TEXT_LAYER` | The PDF has no text (for example a scan) – it was not checked. | Images only; text recognition (OCR) is not supported. |
+| `API_UNREACHABLE` | The scanning service could not be reached – the file was not checked. | No connection to the API (after retries). |
+| `API_TIMEOUT` | The scanning service did not answer in time – the file was not fully checked. | Above *Time limit per request*, after retries. |
+| `API_HTTP_ERROR` | The scanning service returned an error – the file was not fully checked. | The API answered with an error status (e.g. 500, 429) after retries. |
+| `API_BAD_RESPONSE` | The scanning service gave an unexpected answer – the file was not fully checked. | The answer was not in the expected format. |
+| `API_UNAUTHORIZED` | Your APP-ID was rejected – check the extension settings. | Wrong or revoked APP-ID. |
+| `SCAN_INTERRUPTED` | The scan was interrupted – the file was not checked. | The background page stopped mid-scan. |
+| `SCAN_TIMEOUT` | The scan took too long and was stopped – the file was not fully checked. | Above *Time limit per file* (default 120 s). |
+| `TEXT_TRUNCATED` | Only the first X of Y characters were checked. | The text is longer than *Maximum text per file* (default 2,000,000). |
+| `CHUNK_TOO_LARGE` | Part of the text could not be scanned. | The service kept cutting a part short, even at the smallest size. |
+| `QUEUE_FULL` | Too many files at once – this file was not checked. Try again in a moment. | More files waiting than *Files waiting* allows (default 200 MB). |
+
 ## How uploads are detected – hooks in the page's MAIN world
 
 > **The detection code runs inside the web page's own JavaScript world

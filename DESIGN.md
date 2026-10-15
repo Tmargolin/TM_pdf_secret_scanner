@@ -604,6 +604,11 @@ supports it).
 | APP-ID rejected (`API_UNAUTHORIZED`) | "Couldn't scan file.pdf" | "Your APP-ID was rejected – check the extension settings." – click opens the options page |
 | Clean | – | No notification |
 
+**Mixed batch (D39):** if some files of a batch contain secrets and others
+could not be (fully) checked, two notifications are shown – one for the files
+with secrets, one for the failed files. A file with secrets whose text was
+only partly checked stays in the secrets notification, with the notes.
+
 Notes:
 - Notification text is short by nature (the OS truncates long messages), hence
   the compact format and the 3-finding limit.
@@ -1043,6 +1048,7 @@ Decisions challenged before implementation (2026-10-14).
 | D36 | Folder-drop entries hooked **lazily**: wrap `DataTransferItem.webkitGetAsEntry`; when an entry/reader passes, wrap its own prototype once (`file`, `createReader`, `getFile`, `getDirectory`, `readEntries`) before the page receives it | Wrap `FileSystemFileEntry.prototype.file` directly; drop folder-drop support | Found in step 4.2: Chrome does not expose `FileSystemEntry`/`FileSystemFileEntry`/`FileSystemDirectoryEntry` as globals, so the planned direct wrap is impossible. Folder drops stay covered at any depth. |
 | D37 | pdf.js **6.4.299**, pinned (`--save-exact`), **legacy build** (`pdfjs-dist/legacy/build/`) | Modern build; raise `minimum_chrome_version` | The modern build calls very new built-ins directly (e.g. `Map.prototype.getOrInsertComputed`, `Math.sumPrecise`, `Uint8Array.toHex`), missing in Chrome 120 – a crash on the first PDF. The legacy build adds core-js polyfills (~10–20 % larger) that only affect the offscreen document and its worker. Audit clean at install. |
 | D38 | `jobTimeoutMs` counts from the moment a job **starts running** – waiting in the queue is not counted. An unexpected exception inside a job ends that job with `SCAN_INTERRUPTED` | Count from arrival; new `SCAN_FAILED` code | During a burst of uploads, files would otherwise time out just from waiting; queue waiting is bounded by `maxQueuedMB`. One existing code ("the scan stopped unexpectedly – not checked") is enough for the user. |
+| D39 | A batch with both secrets and failures → two notifications (secrets; not fully checked) | One notification about the secrets that also lists the failed files | Keeps the urgent alert short and unmixed, and no failure is buried under a secrets alert (decided by the user, step 7.1) |
 
 ---
 
