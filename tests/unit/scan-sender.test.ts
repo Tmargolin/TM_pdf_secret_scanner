@@ -33,6 +33,13 @@ const healthy: Offscreen = (server) => {
 };
 /** No offscreen document: Chrome closes the port right away. */
 const missing: Offscreen = (server) => queueMicrotask(() => server.disconnect());
+/** Closing document (D42): rejects on the first message and closes. */
+const closing: Offscreen = (server) => {
+  server.onMessage.addListener(() => {
+    server.postMessage({ type: 'BATCH_REJECTED', batchId: BATCH_ID, reason: 'closing' });
+    server.disconnect();
+  });
+};
 /** Accepts the batch, then dies before finishing it. */
 const diesAfterAccept: Offscreen = (server) => {
   server.onMessage.addListener((m) => {
@@ -112,6 +119,14 @@ describe('self-healing (D35)', () => {
     expect(t.ensureCalls()).toBe(1);
     expect(t.clients).toHaveLength(2);
     expect(t.clients[1]?.posted).toHaveLength(3); // the whole batch again
+    expect(t.reports).toEqual([]);
+  });
+
+  it('BATCH_REJECTED (document closing) → ENSURE_OFFSCREEN, then the resend succeeds', async () => {
+    const t = setup([closing, healthy]);
+    expect(await t.sender.send(BATCH)).toBe('done');
+    expect(t.ensureCalls()).toBe(1);
+    expect(t.clients).toHaveLength(2);
     expect(t.reports).toEqual([]);
   });
 

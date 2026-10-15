@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createScanSender } from '../../src/content/scan-sender.ts';
 import { createLogger } from '../../src/shared/safe-logger.ts';
 import { createChromeFake, FAKE_EXTENSION_ID, flushAsync, type ChromeFake } from '../helpers/chrome-fake.ts';
+import { FAKE_APP_ID } from '../helpers/fake-secrets.ts';
 import { createPortPair } from '../helpers/port-pair.ts';
 
 // The page points pdf.js at its worker file inside the extension. In Node
@@ -206,5 +207,98 @@ describe('scan port (content script → offscreen document, direct)', () => {
     deliver({ type: 'SETTINGS_UPDATED', settings: {} }, { id: FAKE_EXTENSION_ID });
     await vi.waitFor(() => expect(outcome).toBe('done'), { timeout: 4_000 }); // pdf.js runs now
     expect(console.info).toHaveBeenCalledWith('[PSS:offscreen] batch received', { files: 1 });
+  });
+
+  it('configured: the PDF is extracted and sent to the API through the page\'s fetch', async () => {
+    const bytes = readFileSync(new URL('../fixtures/one-page.pdf', import.meta.url));
+    const pdf = { ...batch.requests[0]!, size: bytes.length, base64: bytes.toString('base64') };
+    const calls: string[] = [];
+    // Stand-in for the network: the request fails, so no API is ever reached.
+    vi.stubGlobal('fetch', (input: string) => {
+      calls.push(input);
+      return Promise.reject(new TypeError('Failed to fetch'));
+    });
+    fake.sendMessageHandler = answerWith({ appId: FAKE_APP_ID, retries: 0 });
+    await loadOffscreenPage();
+    expect(await contentScript().send({ batchId: BATCH_ID, requests: [pdf] })).toBe('done');
+    expect(calls).toEqual(['https://eu.prompt.security/api/protect']);
+    expect(fake.sentMessages).toContainEqual(
+      expect.objectContaining({
+        type: 'SHOW_RESULT',
+        results: [expect.objectContaining({ status: 'error', errors: [expect.objectContaining({ code: 'API_UNREACHABLE' })] })],
+      }),
+    );
+  });
+});
+
+describe('idle close (D42)', () => {
+  const BATCH_ID = '6a2b3c4d-5555-4666-8777-988899990000';
+  const CONTENT_SCRIPT = { id: FAKE_EXTENSION_ID, tab: { id: 7 } as chrome.tabs.Tab, frameId: 0, origin: 'http://localhost:8787' };
+  const batch = {
+    batchId: BATCH_ID,
+    requests: [
+      {
+        type: 'SCAN_REQUEST' as const,
+        scanId: '5f1c2a3e-1111-4222-8333-944455556666',
+        batchId: BATCH_ID,
+        fileName: 'a.pdf',
+        size: 3,
+        base64: 'YWJj',
+      },
+    ],
+  };
+  const sendBatch = () =>
+    createScanSender({
+      connect() {
+        const { client, server } = createPortPair(CONTENT_SCRIPT);
+        fake.onConnect.dispatch(server as unknown as chrome.runtime.Port);
+        return client;
+      },
+      ensureOffscreen: async () => false,
+      reportInterrupted: async () => {},
+      log: createLogger('content', { sink: () => {} }),
+    }).send(batch);
+
+  /** Loads the page with fake timers and the given idle timeout. */
+  async function loadIdlePage(offscreenIdleTimeoutSec: number) {
+    vi.useFakeTimers();
+    fake.sendMessageHandler = answerWith({ offscreenIdleTimeoutSec });
+    vi.resetModules();
+    await import('../../src/offscreen/offscreen.ts');
+    await vi.advanceTimersByTimeAsync(0);
+  }
+  const idleReports = () => fake.sentMessages.filter((m) => (m as { type?: string }).type === 'OFFSCREEN_IDLE');
+
+  it('reports OFFSCREEN_IDLE to the service worker after offscreenIdleTimeoutSec without work', async () => {
+    await loadIdlePage(10);
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(idleReports()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(idleReports()).toEqual([{ type: 'OFFSCREEN_IDLE' }]);
+  });
+
+  it('0 never reports idle', async () => {
+    await loadIdlePage(0);
+    await vi.advanceTimersByTimeAsync(3_600_000);
+    expect(idleReports()).toEqual([]);
+  });
+
+  it('a batch while closing is rejected and never run', async () => {
+    await loadIdlePage(10);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await sendBatch()).toBe('interrupted'); // rejected; this content script cannot get a new document
+    expect(console.info).not.toHaveBeenCalledWith('[PSS:offscreen] batch received', expect.anything());
+  });
+
+  it('logs when the idle report cannot be delivered', async () => {
+    vi.useFakeTimers();
+    fake.sendMessageHandler = async (message) => {
+      if ((message as { type?: string }).type === 'OFFSCREEN_IDLE') throw new Error('Could not establish connection.');
+      return answerWith({ offscreenIdleTimeoutSec: 10 })(message);
+    };
+    vi.resetModules();
+    await import('../../src/offscreen/offscreen.ts');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(console.warn).toHaveBeenCalledWith('[PSS:offscreen] idle report not delivered to the service worker');
   });
 });

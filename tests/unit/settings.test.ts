@@ -172,6 +172,20 @@ describe('checkNumber', () => {
     expect(checkNumber('chunkSize', v)).toBe('chunkSize must be a whole number');
   });
 
+  it.each([0, 10, 3_600])('offscreenIdleTimeoutSec accepts %d (0 = never close)', (n) => {
+    expect(checkNumber('offscreenIdleTimeoutSec', n)).toBeNull();
+  });
+
+  it.each([1, 9])('offscreenIdleTimeoutSec rejects %d: 0 or at least 10', (n) => {
+    expect(checkNumber('offscreenIdleTimeoutSec', n)).toBe(
+      'offscreenIdleTimeoutSec must be 0 (never close) or between 10 and 3600',
+    );
+  });
+
+  it('offscreenIdleTimeoutSec above 3600 is out of range', () => {
+    expect(checkNumber('offscreenIdleTimeoutSec', 3_601)).toBe('offscreenIdleTimeoutSec must be between 0 and 3600');
+  });
+
   it('limits maxFileSizeMB to 45 (base64 in one 64 MB message)', () => {
     expect(checkNumber('maxFileSizeMB', 45)).toBeNull();
     expect(checkNumber('maxFileSizeMB', 46)).not.toBeNull();
@@ -241,6 +255,11 @@ describe('validateSettings', () => {
 describe('normalizeSettings', () => {
   it.each([undefined, null, 'text', 42])('returns defaults for %s', (raw) => {
     expect(normalizeSettings(raw, false)).toEqual(release);
+  });
+
+  it('a stored offscreenIdleTimeoutSec of 1–9 falls back to the default', () => {
+    expect(normalizeSettings({ offscreenIdleTimeoutSec: 5 }, false).offscreenIdleTimeoutSec).toBe(60);
+    expect(normalizeSettings({ offscreenIdleTimeoutSec: 0 }, false).offscreenIdleTimeoutSec).toBe(0);
   });
 
   it('keeps valid fields and fills in missing ones', () => {

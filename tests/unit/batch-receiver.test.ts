@@ -27,8 +27,10 @@ const CONTENT_SCRIPT = {
 };
 
 /** A receiver with a controllable runBatch, and a client port connected to it. */
-function setup(options: { sender?: chrome.runtime.MessageSender | null; name?: string } = {}) {
+function setup(options: { sender?: chrome.runtime.MessageSender | null; name?: string; closing?: boolean } = {}) {
   const sender = options.sender === undefined ? CONTENT_SCRIPT : (options.sender ?? undefined);
+  // Work as the idle monitor sees it: begun and ended counts.
+  const work = { begun: 0, ended: 0 };
   const runs: ReceivedBatch[] = [];
   const lines: { level: LogLevel; line: string; fields?: Record<string, unknown> }[] = [];
   let finishRun: () => void = () => {};
@@ -39,7 +41,13 @@ function setup(options: { sender?: chrome.runtime.MessageSender | null; name?: s
       dev: true,
       sink: (level, line, fields) => void lines.push(fields === undefined ? { level, line } : { level, line, fields }),
     }),
-    activity: { begin: () => () => {}, isClosing: () => false },
+    activity: {
+      begin: () => {
+        work.begun++;
+        return () => void work.ended++;
+      },
+      isClosing: () => options.closing ?? false,
+    },
     runBatch: (batch) => {
       runs.push(batch);
       return new Promise<void>((resolve, reject) => {
@@ -58,6 +66,7 @@ function setup(options: { sender?: chrome.runtime.MessageSender | null; name?: s
   return {
     client,
     server,
+    work,
     runs,
     lines,
     replies,
@@ -195,5 +204,63 @@ describe('the page goes away', () => {
     await expect(t.finish()).resolves.toBeUndefined(); // BATCH_DONE to a closed port does not throw
     expect(t.server.posted).toEqual([{ type: 'BATCH_ACCEPTED', batchId: BATCH_ID }]); // nobody left to tell
     expect(t.lines.filter((l) => l.level === 'error')).toEqual([]);
+  });
+});
+
+describe('idle close (D42)', () => {
+  it('while closing: BATCH_REJECTED on the first message, port closed, nothing run or counted as work', async () => {
+    const t = setup({ closing: true });
+    await t.send(request(1), request(2), end(2));
+    expect(t.replies).toEqual([{ type: 'BATCH_REJECTED', batchId: BATCH_ID, reason: 'closing' }]);
+    expect(t.disconnected()).toBe(true);
+    expect(t.runs).toEqual([]);
+    expect(t.work).toEqual({ begun: 0, ended: 0 });
+  });
+
+  it('while closing: an invalid first message is refused, not answered', async () => {
+    const t = setup({ closing: true });
+    await t.send({ type: 'SCAN_REQUEST', batchId: BATCH_ID });
+    expect(t.replies).toEqual([]);
+    expect(t.disconnected()).toBe(true);
+  });
+
+  it('refused senders are not work', async () => {
+    const t = setup({ sender: null });
+    await t.send(request(1), end(1));
+    expect(t.work).toEqual({ begun: 0, ended: 0 });
+  });
+
+  it('a batch is work from the moment its port opens until BATCH_DONE', async () => {
+    const t = setup();
+    expect(t.work).toEqual({ begun: 1, ended: 0 });
+    await t.send(request(1), end(1));
+    expect(t.work.ended).toBe(0); // still running
+    await t.finish();
+    expect(t.work).toEqual({ begun: 1, ended: 1 });
+  });
+
+  it('a batch that keeps running after the page left is still work until it ends', async () => {
+    const t = setup();
+    await t.send(request(1), end(1));
+    t.client.disconnect();
+    await flushAsync();
+    expect(t.work.ended).toBe(0);
+    await t.finish();
+    expect(t.work.ended).toBe(1);
+  });
+
+  it.each([
+    ['the page leaves before BATCH_END', async (t: ReturnType<typeof setup>) => {
+      await t.send(request(1));
+      t.client.disconnect();
+      await flushAsync();
+    }],
+    ['a protocol violation', async (t: ReturnType<typeof setup>) => {
+      await t.send(request(1), request(1));
+    }],
+  ])('work ends when %s', async (_name, act) => {
+    const t = setup();
+    await act(t);
+    expect(t.work).toEqual({ begun: 1, ended: 1 });
   });
 });

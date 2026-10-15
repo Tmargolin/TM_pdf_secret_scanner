@@ -205,15 +205,33 @@ describe('parseScanPortReply – BATCH_ACCEPTED / BATCH_DONE', () => {
     });
   }
 
+  it('accepts BATCH_REJECTED with reason closing, keeping only its fields', () => {
+    expect(parseScanPortReply({ type: 'BATCH_REJECTED', batchId: BATCH_ID, reason: 'closing', x: 1 })).toEqual({
+      type: 'BATCH_REJECTED',
+      batchId: BATCH_ID,
+      reason: 'closing',
+    });
+  });
+
+  it.each([undefined, 'busy', 42])('rejects BATCH_REJECTED with reason %s', (reason) => {
+    expect(parseScanPortReply({ type: 'BATCH_REJECTED', batchId: BATCH_ID, reason })).toBeNull();
+  });
+
+  it('BATCH_REJECTED needs a valid batchId', () => {
+    expect(parseScanPortReply({ type: 'BATCH_REJECTED', batchId: 'b', reason: 'closing' })).toBeNull();
+  });
+
   it('replies and requests are not interchangeable', () => {
     expect(parseScanPortMessage({ type: 'BATCH_ACCEPTED', batchId: BATCH_ID })).toBeNull();
     expect(parseScanPortMessage({ type: 'BATCH_DONE', batchId: BATCH_ID })).toBeNull();
+    expect(parseScanPortMessage({ type: 'BATCH_REJECTED', batchId: BATCH_ID, reason: 'closing' })).toBeNull();
   });
 });
 
 describe('parseRuntimeMessage – simple messages', () => {
-  it('accepts OFFSCREEN_READY and ENSURE_OFFSCREEN, dropping extra fields', () => {
+  it('accepts OFFSCREEN_READY, OFFSCREEN_IDLE and ENSURE_OFFSCREEN, dropping extra fields', () => {
     expect(parseRuntimeMessage({ type: 'OFFSCREEN_READY', x: 1 }, false)).toEqual({ type: 'OFFSCREEN_READY' });
+    expect(parseRuntimeMessage({ type: 'OFFSCREEN_IDLE', x: 1 }, false)).toEqual({ type: 'OFFSCREEN_IDLE' });
     expect(parseRuntimeMessage({ type: 'ENSURE_OFFSCREEN', x: 1 }, false)).toEqual({ type: 'ENSURE_OFFSCREEN' });
   });
 
