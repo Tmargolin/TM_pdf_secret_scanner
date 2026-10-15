@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createScanSender, type OutgoingBatch } from '../../src/content/scan-sender.ts';
+import { createScanSender, RESEND_PAUSES_MS, type OutgoingBatch } from '../../src/content/scan-sender.ts';
 import type { ScanRequest } from '../../src/shared/messages.ts';
 import { createLogger, type LogLevel } from '../../src/shared/safe-logger.ts';
 import { createPortPair, type FakePort } from '../helpers/port-pair.ts';
@@ -55,11 +55,14 @@ function setup(connections: Offscreen[], options: { ensureOk?: boolean; reportFa
   const reports: { batchId: string; fileNames: string[] }[] = [];
   const lines: { level: LogLevel; line: string }[] = [];
   let ensureCalls = 0;
+  /** Everything in order: connections, ENSURE_OFFSCREEN calls and pauses. */
+  const steps: string[] = [];
   const sender = createScanSender({
     connect() {
       if (options.connectThrows) throw new Error('Extension context invalidated.');
       const { client, server } = createPortPair();
       const behave = connections[clients.length] ?? missing;
+      steps.push('connect');
       clients.push(client);
       servers.push(server);
       behave(server);
@@ -67,6 +70,7 @@ function setup(connections: Offscreen[], options: { ensureOk?: boolean; reportFa
     },
     async ensureOffscreen() {
       ensureCalls++;
+      steps.push('ensure');
       return options.ensureOk ?? true;
     },
     async reportInterrupted(batchId, fileNames) {
@@ -74,8 +78,10 @@ function setup(connections: Offscreen[], options: { ensureOk?: boolean; reportFa
       reports.push({ batchId, fileNames });
     },
     log: createLogger('content', { dev: true, sink: (level, line) => void lines.push({ level, line }) }),
+    // No real waiting in tests: record the pause instead.
+    sleep: async (ms) => void steps.push(`pause ${ms}`),
   });
-  return { sender, clients, servers, reports, lines, ensureCalls: () => ensureCalls };
+  return { sender, clients, servers, reports, lines, steps, ensureCalls: () => ensureCalls };
 }
 
 describe('sending a batch', () => {
@@ -202,5 +208,56 @@ describe('reply validation', () => {
   it('a port closed by the other end at once counts as not accepted', async () => {
     const t = setup([(server) => server.disconnect(), healthy]);
     expect(await t.sender.send(BATCH)).toBe('done');
+  });
+});
+
+describe('resends while the document is closing (D43)', () => {
+  it('pauses 0 / 200 / 500 ms before the 1st / 2nd / 3rd resend', () => {
+    expect(RESEND_PAUSES_MS).toEqual([0, 200, 500]);
+  });
+
+  it('never accepted: connect, then ensure + pause + connect three times, then SCAN_INTERRUPTED', async () => {
+    const t = setup([missing, closing, closing, closing]);
+    expect(await t.sender.send(BATCH)).toBe('interrupted');
+    expect(t.steps).toEqual(['connect', 'ensure', 'connect', 'ensure', 'pause 200', 'connect', 'ensure', 'pause 500', 'connect']);
+    expect(t.reports).toHaveLength(1);
+  });
+
+  it('scan during close self-heals: rejected twice, then a new document finishes the batch', async () => {
+    const t = setup([closing, closing, healthy]);
+    expect(await t.sender.send(BATCH)).toBe('done');
+    expect(t.steps).toEqual(['connect', 'ensure', 'connect', 'ensure', 'pause 200', 'connect']);
+    expect(t.clients[2]?.posted).toHaveLength(3); // the whole batch on the last port
+    expect(t.reports).toEqual([]);
+  });
+
+  it('the last resend can still succeed', async () => {
+    const t = setup([closing, closing, closing, healthy]);
+    expect(await t.sender.send(BATCH)).toBe('done');
+    expect(t.clients).toHaveLength(4);
+  });
+
+  it('rejected, then no document (closed meanwhile): the next ensure creates one and the batch finishes', async () => {
+    const t = setup([closing, missing, healthy]);
+    expect(await t.sender.send(BATCH)).toBe('done');
+    expect(t.ensureCalls()).toBe(2);
+  });
+
+  it('ENSURE_OFFSCREEN fails: no pause and no further resend', async () => {
+    const t = setup([closing, healthy], { ensureOk: false });
+    expect(await t.sender.send(BATCH)).toBe('interrupted');
+    expect(t.steps).toEqual(['connect', 'ensure']);
+  });
+
+  it('a batch accepted on a resend and then lost is not resent again', async () => {
+    const t = setup([closing, diesAfterAccept, healthy]);
+    expect(await t.sender.send(BATCH)).toBe('interrupted');
+    expect(t.clients).toHaveLength(2);
+  });
+
+  it('no pause at all when the first attempt succeeds', async () => {
+    const t = setup([healthy]);
+    await t.sender.send(BATCH);
+    expect(t.steps).toEqual(['connect']);
   });
 });
