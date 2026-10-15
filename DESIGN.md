@@ -824,6 +824,7 @@ etc.).
    b. `test: …` (regression test for that fix)
 2. `build: add release packaging script`
 3. `docs: complete README per §14`
+4. `chore(release): 1.0.0`
 → tag `step-9` / `v1.0.0`
 
 **Step 10 – offscreen lifecycle**
