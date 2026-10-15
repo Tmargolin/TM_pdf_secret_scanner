@@ -18,7 +18,8 @@ Status: steps 0–7 done (tags `step-0` … `step-7`); next: step 8 (§11).
   triggers a scan, not a network upload (D7, D9); no event-listener safety net
   (D8, D40).
 - **Offscreen document owns the whole scan**; the service worker is never on
-  the scan path (D3, D6); always present until step 10 (D4).
+  the scan path (D3, D6); always present in v1.0 (D4), created on demand and
+  closed when idle from v1.1 (D41–D43).
 - **Resilient concurrency** across files and tabs (§4.1, D5).
 - The API silently stops scanning long texts → 32k-character chunks, bounded
   shrinking, partial scans reported, never "clean" for unchecked text (§4.2,
@@ -150,10 +151,37 @@ Why bytes travel as **base64**: runtime messaging JSON-serialises its payload
 base64 (≤ ~60 MB) under Chrome's 64 MB message limit. Going directly content
 script → offscreen means one hop, one copy.
 
-Offscreen lifecycle (v1): always present while the extension runs (ensured on
+Offscreen lifecycle (v1.0): always present while the extension runs (ensured on
 install, browser start and every service-worker start – e.g. after the
-extension is re-enabled – and re-created on demand by step 5 of the flows). Lazy creation and
-closing after an idle timeout are added in step 10.
+extension is re-enabled – and re-created on demand by step 5 of the flows).
+
+### Offscreen lifecycle from v1.1 (step 10)
+
+**Lazy creation (D41).** Nothing creates the document at start-up. The first
+batch finds no receiver, its port closes before `BATCH_ACCEPTED`, and flow 5
+creates the document and resends. Cost only on the first batch after idle: a
+failed connect, one wasted post of the files, document + pdf.js start-up.
+
+**Idle close (D42).** Only the offscreen document knows whether it is busy;
+only the service worker can call `chrome.offscreen.closeDocument()`.
+- *Offscreen:* the idle timer runs only while there is **no work** – no jobs in
+  the registry, no batch port open, no `SHOW_RESULT` being sent. Any activity
+  stops it. When it fires (after `offscreenIdleTimeoutSec`; `0` = never), in the
+  same task the document enters **closing** and sends `OFFSCREEN_IDLE`. While
+  closing, every new scan port gets `BATCH_REJECTED {reason:'closing'}` and is
+  disconnected before any file is accepted – a batch is never accepted by a
+  document about to close. Safety valve: if the document still exists 5 s
+  later, it leaves closing and restarts the idle timer.
+- *Service worker:* on `OFFSCREEN_IDLE` (offscreen sender only) it closes the
+  document. Close and create run through **one queue** in the offscreen
+  manager: an `ENSURE_OFFSCREEN` that arrives during a close waits for it, then
+  creates a new document.
+
+**Retries (D43).** The content script retries a batch that was rejected or
+not accepted up to 3 times, each after `ENSURE_OFFSCREEN` and a short pause.
+This covers an `ENSURE_OFFSCREEN` that reaches the service worker before
+`OFFSCREEN_IDLE` (Chrome does not order messages from different senders).
+After the last try → `SCAN_INTERRUPTED`.
 
 Rejected alternatives (see §13): all-in-service-worker, pdf.js in the content
 script, extraction-only offscreen document.
@@ -576,7 +604,7 @@ no rate limiting observed (`maxConcurrency` stays 4).
 | `requestTimeoutMs` | 15000 | |
 | `retries` | 2 | Exponential backoff |
 | `maxFileSizeMB` | 25 | Allowed 1–45: files travel base64-encoded in one message (64 MB limit) |
-| `offscreenIdleTimeoutSec` | 60 | Added in step 10 only |
+| `offscreenIdleTimeoutSec` | 60 | 0 (never close) or 10–3,600; idle time before the offscreen document is closed (step 10, D42) |
 
 The README lists all defaults from step 9 (§14).
 
@@ -792,7 +820,7 @@ before it is tagged and pushed.
 | 7 | **Notifications** | All cases, one per batch, i18n catalogue, file-name sanitising, not-configured, `SCAN_INTERRUPTED`, partial / failed / `QUEUE_FULL` / too large | Every case in the manual checklist shows the right notification, incl. tab closed mid-scan |
 | 8 | **Real-site testing** | Developer tests Gmail / Drive / ChatGPT / LinkedIn; fixes with regression tests; safety-net decision | Results and safety-net decision recorded in §13 |
 | 9 | **Hardening & docs** | Edge cases, README complete per §14, release packaging | Every §14 item ticked; zip ready → `v1.0.0` |
-| 10 | **Offscreen lifecycle** | Lazy creation (via connect-fail → `ENSURE_OFFSCREEN`), close after `offscreenIdleTimeoutSec` (offscreen reports idle, service worker closes it), measurements | No offscreen document while idle; startup cost and memory saving recorded → `v1.1.0` |
+| 10 | **Offscreen lifecycle** | Lazy creation (via connect-fail → `ENSURE_OFFSCREEN`), close after `offscreenIdleTimeoutSec` (offscreen reports idle and rejects new batches while closing, service worker closes it; close and create in one queue), content-script retries, measurements (§2, D41–D43) | No offscreen document while idle; startup cost and memory saving recorded → `v1.1.0` |
 
 Sample PDFs are generated by `scripts/make-fixtures.ts` (hand-built PDF, no
 library): one/multi-page, multi-line, split token, special characters, empty
@@ -830,9 +858,13 @@ etc.).
 **Step 10 – offscreen lifecycle**
 1. a. `feat(background): create offscreen document lazily on first scan`
    b. `test(background): cover lazy creation`
-2. a. `feat: close offscreen document after idle timeout`
-   b. `test: idle timer runs only with zero active jobs; scan during close self-heals`
-3. `docs: record measured startup cost and memory saving`
+2. a. `feat(offscreen): report idle after offscreenIdleTimeoutSec and reject new batches while closing`
+   b. `test(offscreen): idle timer runs only with no work; rejects while closing; safety valve`
+3. a. `feat(background): close offscreen document on OFFSCREEN_IDLE, close and create in one queue`
+   b. `test(background): ensure during close waits and recreates`
+4. a. `feat(content): retry rejected batches up to 3 times`
+   b. `test(content): scan during close self-heals`
+5. `docs: record measured startup cost and memory saving`
 → tag `step-10` / `v1.1.0`
 
 ---
@@ -860,7 +892,6 @@ etc.).
   missed. Future option (D14): text clean-up before chunking – normalise
   non-breaking spaces, remove zero-width characters, re-join hyphenated line
   breaks, collapse spacing pdf.js inserts inside tokens.
-- Offscreen document always open until step 10 (lazy creation, idle close).
 - OCR for scanned PDFs; other file types (DOCX, TXT…).
 - Automated end-to-end tests with Playwright (planned – see §15).
 - No event-listener safety net (D40) – reassess if a site bypasses the hooks.
@@ -921,6 +952,9 @@ Decisions challenged before implementation (2026-10-14).
 | D38 | `jobTimeoutMs` counts from the moment a job **starts running** – waiting in the queue is not counted. An unexpected exception inside a job ends that job with `SCAN_INTERRUPTED` | Count from arrival; new `SCAN_FAILED` code | During a burst of uploads, files would otherwise time out just from waiting; queue waiting is bounded by `maxQueuedMB`. One existing code ("the scan stopped unexpectedly – not checked") is enough for the user. |
 | D39 | A batch with both secrets and failures → two notifications (secrets; not fully checked) | One notification about the secrets that also lists the failed files | Keeps the urgent alert short and unmixed, and no failure is buried under a secrets alert (decided by the user, step 7.1) |
 | D40 | Event-listener safety net **not added** (step 8) | Add it as a second detection layer | Every tested site (Gmail, Drive, ChatGPT, LinkedIn) was detected by the hand-off hooks alone; a second layer would add code and a cross-layer de-duplication for no observed gain. Reassess if a site is found that bypasses the hooks. |
+| D41 | Offscreen document created **lazily** through the existing connect-fail path (flow 5); nothing creates it at start-up (supersedes D4 from v1.1) | `ENSURE_OFFSCREEN` before every batch | Costs only on the first batch after idle; no service-worker wake-up per batch; reuses a tested path. |
+| D42 | **Offscreen decides idle, service worker closes**; a closing document rejects new batches (`BATCH_REJECTED`) before accepting any file; close and create share one queue; 5 s safety valve | Offscreen closes itself (`window.close()`); service worker decides from its own view | Only the offscreen document knows it is busy; only the service worker can close it. Rejecting before acceptance means an accepted batch is never killed by a close. |
+| D43 | Content script retries a rejected or unaccepted batch **up to 3 times** (was once) | Keep one retry | Covers `ENSURE_OFFSCREEN` reaching the service worker before `OFFSCREEN_IDLE` – messages from different senders are not ordered. |
 
 ---
 
